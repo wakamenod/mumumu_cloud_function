@@ -1,0 +1,31 @@
+# 依存パッケージ
+functions/node_modules/
+
+# TypeScript ビルド成果物
+functions/lib/
+
+# Firebase ローカル設定・キャッシュ
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+*.local
+.firebaserc
+
+# 環境変数・シークレット（絶対にコミットしない）
+.env
+.env.*
+*.env
+*.secret
+serviceAccountKey.json
+*service-account*.json
+*credentials*.json
+
+# エディタ
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

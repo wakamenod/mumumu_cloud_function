@@ -1,0 +1,25 @@
+# gitleaks 設定ファイル
+# https://github.com/gitleaks/gitleaks
+
+title = "mumumu_cloud_function gitleaks config"
+
+[extend]
+# gitleaks 公式のデフォルトルールセットを継承
+useDefault = true
+
+# ───────────────────────────────────────────────
+# スキャン対象外（allowlist）
+# ───────────────────────────────────────────────
+[allowlist]
+description = "プロジェクト固有の除外設定"
+
+# テスト・サンプルファイルは除外
+paths = [
+    '''functions/node_modules''',
+    '''functions/lib''',
+    '''\.gitleaks\.toml''',
+]
+
+# ダミー値や既知の安全な文字列パターンをここに追加
+# 例: regexes = ['''my-dummy-secret-value''']
+regexes = []
