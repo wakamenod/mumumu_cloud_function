@@ -1,0 +1,182 @@
+#+TITLE: Firebase App Check — React Native クライアント設定手順
+#+AUTHOR: アプリ開発プロジェクト
+#+DATE: 2026-06-17
+#+OPTIONS: toc:t num:t
+
+* 1. 概要
+
+本ドキュメントは、React Native アプリに Firebase App Check を組み込む手順をまとめたものである。
+App Check を有効にすることで、正規アプリ以外からの Cloud Functions 呼び出しを OS レベルで防御する。
+
+| プラットフォーム | 使用する認証プロバイダー |
+|------------------+--------------------------|
+| Android          | Play Integrity API       |
+| iOS              | App Attest               |
+| 開発・エミュレーター | Debug Provider         |
+
+サーバー側の設定については =cloud-functions-spec.org= §6.1 を参照。
+
+-----
+
+* 2. パッケージのインストール
+
+#+BEGIN_SRC bash
+npm install @react-native-firebase/app @react-native-firebase/app-check
+#+END_SRC
+
+iOS は追加で Pod をインストールする。
+
+#+BEGIN_SRC bash
+npx pod-install
+#+END_SRC
+
+-----
+
+* 3. Android のセットアップ
+
+** 3.1 Play Integrity API の有効化
+
+1. [[https://console.cloud.google.com/][Google Cloud Console]] を開く
+2. Firebase プロジェクトと紐付いている Google Cloud プロジェクトを選択
+3. 「API とサービス」→「ライブラリ」で *Play Integrity API* を検索して有効化する
+
+** 3.2 Firebase コンソールの設定
+
+1. [[https://console.firebase.google.com/][Firebase コンソール]] を開く
+2. 「アプリのチェック」→「アプリ」タブを選択
+3. Android アプリを選択し、*Play Integrity* を登録する
+4. SHA-256 フィンガープリントの登録を求められる場合は以下で取得する
+
+#+BEGIN_SRC bash
+# デバッグ用キー（開発時）
+keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
+  -storepass android -keypass android
+#+END_SRC
+
+** 3.3 コードの設定（Android）
+
+アプリのエントリポイント（例: =App.tsx= または =_layout.tsx=）に以下を追加する。
+
+#+BEGIN_SRC typescript
+import { firebase } from '@react-native-firebase/app';
+import appCheck from '@react-native-firebase/app-check';
+
+// App Check の初期化（アプリ起動時に一度だけ実行）
+const rnfbProvider = appCheck().newReactNativeFirebaseAppCheckProvider();
+rnfbProvider.configure({
+  android: {
+    provider: 'playIntegrity',
+  },
+  // iOS の設定は後述
+  apple: {
+    provider: 'appAttest',
+  },
+  isTokenAutoRefreshEnabled: true,
+});
+
+await appCheck().initializeAppCheck({
+  provider: rnfbProvider,
+  isTokenAutoRefreshEnabled: true,
+});
+#+END_SRC
+
+-----
+
+* 4. iOS のセットアップ
+
+** 4.1 App Attest の有効化（Xcode）
+
+1. Xcode でプロジェクトを開く
+2. ターゲットを選択 →「Signing & Capabilities」タブ
+3. 「+ Capability」をクリックし、*App Attest* を追加する
+
+** 4.2 Firebase コンソールの設定
+
+1. Firebase コンソール →「アプリのチェック」→「アプリ」タブ
+2. iOS アプリを選択し、*App Attest* を登録する
+
+** 4.3 コードの設定（iOS）
+
+Android と共通の初期化コードで対応できる（§3.3 参照）。
+iOS では =provider: 'appAttest'= が使用される。
+
+iOS 14 未満のデバイスをサポートする場合は =appAttestWithDeviceCheckFallback= を使用する。
+
+#+BEGIN_SRC typescript
+apple: {
+  provider: 'appAttestWithDeviceCheckFallback', // iOS 14 未満のフォールバック
+},
+#+END_SRC
+
+-----
+
+* 5. 開発・エミュレーター用の Debug Provider
+
+実機以外（シミュレーター・エミュレーター・CI 環境）では Play Integrity / App Attest が利用できないため、*Debug Provider* を使用する。
+
+** 5.1 デバッグトークンの取得
+
+初回起動時にログに出力されるデバッグトークンを Firebase コンソールに登録する。
+
+#+BEGIN_EXAMPLE
+[FirebaseAppCheck] App Check debug token: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+#+END_EXAMPLE
+
+Firebase コンソール →「アプリのチェック」→「アプリ」→「デバッグトークンを管理」で登録する。
+
+** 5.2 コードの設定
+
+開発ビルドと本番ビルドを環境変数で切り替える。
+
+#+BEGIN_SRC typescript
+import appCheck from '@react-native-firebase/app-check';
+
+const rnfbProvider = appCheck().newReactNativeFirebaseAppCheckProvider();
+rnfbProvider.configure({
+  android: {
+    provider: __DEV__ ? 'debug' : 'playIntegrity',
+    debugToken: __DEV__ ? 'XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX' : undefined,
+  },
+  apple: {
+    provider: __DEV__ ? 'debug' : 'appAttest',
+    debugToken: __DEV__ ? 'XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX' : undefined,
+  },
+  isTokenAutoRefreshEnabled: true,
+});
+
+await appCheck().initializeAppCheck({
+  provider: rnfbProvider,
+  isTokenAutoRefreshEnabled: true,
+});
+#+END_SRC
+
+*デバッグトークンをソースコードにハードコードしてリポジトリに commit しないこと。*
+環境変数ファイル（=.env=）または CI のシークレット変数で管理する。
+
+-----
+
+* 6. 動作確認
+
+** 6.1 App Check が有効になっているか確認
+
+Firebase コンソール →「アプリのチェック」→「API」タブで、
+=getQuizFunction= への呼び出しが「検証済み」として記録されているか確認する。
+
+** 6.2 未登録のクライアントからの呼び出しが弾かれるか確認
+
+App Check トークンを付与せずに =getQuizFunction= を呼び出すと、
+以下のエラーが返ることを確認する。
+
+#+BEGIN_EXAMPLE
+FirebaseError: [code=unauthenticated]: Unauthenticated
+#+END_EXAMPLE
+
+-----
+
+* 7. 注意事項
+
+- App Check の強制モード（=enforceAppCheck: true=）を有効にする *前に*、
+  Firebase コンソールの「モニタリング」タブで既存トラフィックの検証率が
+  十分に高いことを確認する。急に強制化すると正規ユーザーが弾かれる場合がある。
+- デバッグトークンは本番アプリに含めないこと。=__DEV__= フラグと環境変数で管理する。
+- App Check トークンは自動更新（=isTokenAutoRefreshEnabled: true=）を有効にしておく。

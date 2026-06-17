@@ -53,10 +53,10 @@ index.ts（Function の登録・エクスポート）
 
 * 2. Function 一覧
 
-| Function 名       | 種別        | 認証要否 | 概要                                   |
-|-------------------+-------------+----------+----------------------------------------|
-| =helloWorld=      | HTTP        | 不要     | ヘルスチェック用エンドポイント         |
-| =getQuizFunction= | onCall (v2) | 不要     | レベル指定で 20 問のクイズデータを返す |
+| Function 名       | 種別        | App Check | 概要                                   |
+|-------------------+-------------+-----------+----------------------------------------|
+| =helloWorld=      | HTTP        | なし      | ヘルスチェック用（機密データなし）     |
+| =getQuizFunction= | onCall (v2) | 強制      | レベル指定で 20 問のクイズデータを返す |
 
 -----
 
@@ -237,13 +237,63 @@ const FILE_VERSION = "v2"; // ← ここを変更してデプロイ
 
 * 6. セキュリティ設計
 
-** 6.1 チート対策（メモリスキャン防止）
+** 6.1 Firebase App Check（不正呼び出し防止）
+
+正規アプリ以外からの Function 呼び出しを OS レベルで防御する。
+
+*** 仕組み
+
+#+BEGIN_EXAMPLE
+[Android / iOS アプリ]
+    │  起動時に App Check SDK がトークンを取得
+    │    Android: Play Integrity API
+    │    iOS:     App Attest
+    ▼
+[Firebase App Check サービス]
+    │  プラットフォームの証明書を検証してトークンを発行
+    ▼
+[getQuizFunction（onCall）]
+    │  enforceAppCheck: true により
+    │  トークンが無効・欠落なら UNAUTHENTICATED を返す
+    ▼
+  handleGetQuiz（ビジネスロジック）
+#+END_EXAMPLE
+
+*** サーバー側の実装
+
+=enforceAppCheck: true= を `onCall` のオプションに渡すだけで有効になる。
+トークンの検証は Firebase SDK が自動で行い、ハンドラー側のコードは不変。
+
+#+BEGIN_SRC typescript
+export const getQuizFunction = onCall(
+  {enforceAppCheck: true},
+  async (request) => {
+    return handleGetQuiz(request.data);
+  }
+);
+#+END_SRC
+
+*** helloWorld について
+
+=helloWorld= は機密データを持たないヘルスチェック専用エンドポイントのため、
+App Check の対象外とする。
+
+*** テストへの影響
+
+=enforceAppCheck= は Firebase SDK レベルで処理されるため、=handleGetQuiz= の
+ユニットテストには影響しない（既存の 21 テストはそのまま有効）。
+
+*** クライアント側のセットアップ
+
+React Native クライアントの設定手順は =app-check-client-setup.org= を参照。
+
+** 6.2 チート対策（メモリスキャン防止）
 
 - Storage JSON には生の正解を保持する
 - *クライアントには answer_hash（SHA-256 ハッシュ値）のみを渡す*
 - スマートフォンのメモリ上にも生の正解は存在しないため、メモリスキャンによる答えの自動割り出しが不可能
 
-** 6.2 ランキング不正防止（フッキング対策）
+** 6.3 ランキング不正防止（フッキング対策）
 
 - クライアントの正誤判定（ローカルハッシュ突合）はあくまで演出用
 - ランキング登録時はクライアントから「生の解答リスト」をサーバーに送信し、Functions 側で一から答え合わせを行う（未実装・今後の実装対象）

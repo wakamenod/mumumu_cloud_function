@@ -25,11 +25,18 @@ export const helloWorld = onRequest((request, response) => {
 /**
  * onCall: getQuiz
  * 指定されたレベル（A〜L）の問題データを Firebase Storage から取得し、
- * シャッフルした 20 問を返す。認証不要（ユーザー登録なし）。
+ * シャッフルした 20 問を返す。
+ *
+ * enforceAppCheck: true により、有効な App Check トークンを持つ正規アプリ
+ * からのリクエストのみを受け付ける。トークンが無効・欠落の場合は
+ * Firebase SDK が自動的に UNAUTHENTICATED エラーを返す。
  *
  * リクエスト形式: { levels: string[] }  例: { levels: ["A", "C"] }
  * レスポンス形式: { questions: Array<{ order, id, question, answer_hash }> }
  */
-export const getQuizFunction = onCall(async (request) => {
-  return handleGetQuiz(request.data);
-});
+export const getQuizFunction = onCall(
+  {enforceAppCheck: true},
+  async (request) => {
+    return handleGetQuiz(request.data);
+  }
+);
