@@ -6,6 +6,7 @@ import * as authV1 from "firebase-functions/v1/auth";
 import * as logger from "firebase-functions/logger";
 import {createUser} from "./services/userService.js";
 import {handleCreateUser, handleGetUser} from "./handlers/userHandlers.js";
+import {handleGetQuiz} from "./handlers/quizHandlers.js";
 
 // Firebase Admin SDK の初期化
 admin.initializeApp();
@@ -39,6 +40,18 @@ export const createUserFunction = onCall(async (request) => {
  */
 export const getUserFunction = onCall(async (request) => {
   return handleGetUser(request.auth, request.data);
+});
+
+/**
+ * onCall: getQuiz
+ * 指定されたレベル（A〜L）の問題データを Firebase Storage から取得し、
+ * シャッフルした 20 問を返す。認証不要（ユーザー登録なし）。
+ *
+ * リクエスト形式: { levels: string[] }  例: { levels: ["A", "C"] }
+ * レスポンス形式: { questions: Array<{ order, question, answer_hash }> }
+ */
+export const getQuizFunction = onCall(async (request) => {
+  return handleGetQuiz(request.data);
 });
 
 /**
