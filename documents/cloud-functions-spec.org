@@ -25,18 +25,14 @@ functions/
 ├── src/
 │   ├── index.ts                   # Function のエントリポイント・エクスポート
 │   ├── handlers/
-│   │   ├── quizHandlers.ts        # クイズ取得のビジネスロジック
-│   │   └── userHandlers.ts        # ユーザー CRUD のビジネスロジック
+│   │   └── quizHandlers.ts        # クイズ取得のビジネスロジック
 │   └── services/
-│       ├── quizService.ts         # Storage アクセス・キャッシュ・ハッシュ化
-│       └── userService.ts         # Firestore ユーザー CRUD
+│       └── quizService.ts         # Storage アクセス・キャッシュ・ハッシュ化
 └── tests/
     ├── handlers/
-    │   ├── quizHandlers.test.ts
-    │   └── userHandlers.test.ts
+    │   └── quizHandlers.test.ts
     └── services/
-        ├── quizService.test.ts
-        └── userService.test.ts
+        └── quizService.test.ts
 #+END_EXAMPLE
 
 アーキテクチャは 3 層構造を採用する。
@@ -57,13 +53,10 @@ index.ts（Function の登録・エクスポート）
 
 * 2. Function 一覧
 
-| Function 名         | 種別         | 認証要否 | 概要                                             |
-|---------------------+--------------+----------+--------------------------------------------------|
-| =helloWorld=        | HTTP         | 不要     | ヘルスチェック用エンドポイント                   |
-| =getQuizFunction=   | onCall (v2)  | 不要     | レベル指定で 20 問のクイズデータを返す           |
-| =createUserFunction= | onCall (v2) | 必要     | Firestore にユーザードキュメントを作成する       |
-| =getUserFunction=   | onCall (v2)  | 必要     | Firestore からユーザー情報を取得する             |
-| =onUserCreatedTrigger= | Auth トリガー | ―     | Firebase Auth ユーザー作成時に Firestore へ自動登録 |
+| Function 名       | 種別        | 認証要否 | 概要                                   |
+|-------------------+-------------+----------+----------------------------------------|
+| =helloWorld=      | HTTP        | 不要     | ヘルスチェック用エンドポイント         |
+| =getQuizFunction= | onCall (v2) | 不要     | レベル指定で 20 問のクイズデータを返す |
 
 -----
 
@@ -262,13 +255,11 @@ const FILE_VERSION = "v2"; // ← ここを変更してデプロイ
 
 ** 7.1 テスト構成
 
-| ファイル                          | テスト数 | 対象                         |
-|-----------------------------------+----------+------------------------------|
-| =tests/handlers/quizHandlers.test.ts=  | 14       | handleGetQuiz（正常系・異常系）|
-| =tests/services/quizService.test.ts=   | 7        | fetchQuizData・hashAnswer    |
-| =tests/handlers/userHandlers.test.ts=  | 13       | handleCreateUser・handleGetUser |
-| =tests/services/userService.test.ts=   | 7        | createUser・getUserById      |
-| *合計*                            | *41*     |                              |
+| ファイル                               | テスト数 | 対象                            |
+|----------------------------------------+----------+---------------------------------|
+| =tests/handlers/quizHandlers.test.ts=  | 14       | handleGetQuiz（正常系・異常系） |
+| =tests/services/quizService.test.ts=   | 7        | fetchQuizData・hashAnswer       |
+| *合計*                                 | *21*     |                                 |
 
 ** 7.2 主なテストケース（getQuiz）
 
