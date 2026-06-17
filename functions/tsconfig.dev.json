@@ -1,5 +1,16 @@
 {
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "outDir": "lib-dev",
+    "types": ["jest", "node"],
+    "noUnusedLocals": false
+  },
   "include": [
-    ".eslintrc.js"
+    ".eslintrc.js",
+    "src",
+    "tests"
   ]
 }
+

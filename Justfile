@@ -33,6 +33,22 @@ lint:
 check: lint build
 
 # ───────────────────────────────────────────────
+# テスト
+# ───────────────────────────────────────────────
+
+# テストを実行
+test:
+    npm --prefix functions test
+
+# ウォッチモードでテストを実行
+test-watch:
+    npm --prefix functions run test:watch
+
+# カバレッジレポート付きでテストを実行
+test-coverage:
+    npm --prefix functions run test:coverage
+
+# ───────────────────────────────────────────────
 # エミュレーター
 # ───────────────────────────────────────────────
 

@@ -1,32 +1,58 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
-
+import * as admin from "firebase-admin";
 import {setGlobalOptions} from "firebase-functions";
 import {onRequest} from "firebase-functions/https";
+import {onCall} from "firebase-functions/v2/https";
+import * as authV1 from "firebase-functions/v1/auth";
 import * as logger from "firebase-functions/logger";
+import {createUser} from "./services/userService.js";
+import {handleCreateUser, handleGetUser} from "./handlers/userHandlers.js";
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+// Firebase Admin SDK の初期化
+admin.initializeApp();
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+setGlobalOptions({maxInstances: 10});
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+/**
+ * GET /helloWorld
+ * ヘルスチェック用エンドポイント。サービスの稼働確認に使用する。
+ */
+export const helloWorld = onRequest((request, response) => {
+  logger.info("helloWorld called", {structuredData: true});
+  response.json({
+    message: "Hello from Firebase!",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * onCall: createUser
+ * クライアントからユーザー情報を受け取り Firestore にドキュメントを作成する。
+ * 認証済みユーザーのみ呼び出し可能。
+ */
+export const createUserFunction = onCall(async (request) => {
+  return handleCreateUser(request.auth, request.data);
+});
+
+/**
+ * onCall: getUser
+ * 指定した uid のユーザー情報を返す。認証済みユーザーのみ呼び出し可能。
+ */
+export const getUserFunction = onCall(async (request) => {
+  return handleGetUser(request.auth, request.data);
+});
+
+/**
+ * Auth トリガー: onUserCreated
+ * Firebase Auth でユーザーが作成された際に自動的に Firestore ドキュメントを作成する。
+ */
+export const onUserCreatedTrigger = authV1.user().onCreate(
+  async (user) => {
+    const {uid, email, displayName} = user;
+    logger.info(`New user created: uid=${uid}, email=${email}`);
+
+    await createUser(uid, {
+      displayName: displayName ?? "名無しユーザー",
+      email: email ?? "",
+    });
+  }
+);
