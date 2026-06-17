@@ -52,9 +52,14 @@ test-coverage:
 # エミュレーター
 # ───────────────────────────────────────────────
 
-# Functions エミュレーターを起動（ビルド込み）
+# Functions + Storage エミュレーターを起動（ビルド込み）
+# 起動後、別ターミナルで `just seed` を実行して問題 JSON を投入する
 emulate:
-    npm --prefix functions run serve
+    npm --prefix functions run build && firebase emulators:start --only functions,storage
+
+# シードデータをエミュレーターにアップロード（emulate 起動後に別ターミナルで実行）
+seed:
+    node scripts/seed-emulator.mjs
 
 # Firebase Functions のインタラクティブシェルを起動
 shell:
