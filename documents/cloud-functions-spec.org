@@ -1,0 +1,304 @@
+#+TITLE: Cloud Functions 実装仕様書
+#+AUTHOR: アプリ開発プロジェクト
+#+DATE: 2026-06-17
+#+OPTIONS: toc:t num:t
+
+* 1. 概要
+
+本ドキュメントは、クイズアプリのバックエンドとして実装した Firebase Cloud Functions の仕様をまとめたものである。
+
+** 1.1 技術スタック
+
+| 項目               | 内容                          |
+|--------------------+-------------------------------|
+| ランタイム         | Node.js 24                    |
+| 言語               | TypeScript (strict mode)      |
+| モジュール形式     | NodeNext (ESM)                |
+| firebase-functions | v7.0.0                        |
+| firebase-admin     | v13.6.0                       |
+| テストフレームワーク | Jest + ts-jest                |
+
+** 1.2 ディレクトリ構成
+
+#+BEGIN_EXAMPLE
+functions/
+├── src/
+│   ├── index.ts                   # Function のエントリポイント・エクスポート
+│   ├── handlers/
+│   │   ├── quizHandlers.ts        # クイズ取得のビジネスロジック
+│   │   └── userHandlers.ts        # ユーザー CRUD のビジネスロジック
+│   └── services/
+│       ├── quizService.ts         # Storage アクセス・キャッシュ・ハッシュ化
+│       └── userService.ts         # Firestore ユーザー CRUD
+└── tests/
+    ├── handlers/
+    │   ├── quizHandlers.test.ts
+    │   └── userHandlers.test.ts
+    └── services/
+        ├── quizService.test.ts
+        └── userService.test.ts
+#+END_EXAMPLE
+
+アーキテクチャは 3 層構造を採用する。
+
+#+BEGIN_EXAMPLE
+index.ts（Function の登録・エクスポート）
+    └── handlers/（入力バリデーション・ビジネスロジック）
+            └── services/（Storage / Firestore への I/O）
+#+END_EXAMPLE
+
+** 1.3 グローバル設定
+
+- 最大インスタンス数: =10=（=setGlobalOptions({ maxInstances: 10 })=）
+- レガシー Runtime Config 無効（=disallowLegacyRuntimeConfig: true=）
+- デプロイ前に =lint= と =build= を自動実行
+
+-----
+
+* 2. Function 一覧
+
+| Function 名         | 種別         | 認証要否 | 概要                                             |
+|---------------------+--------------+----------+--------------------------------------------------|
+| =helloWorld=        | HTTP         | 不要     | ヘルスチェック用エンドポイント                   |
+| =getQuizFunction=   | onCall (v2)  | 不要     | レベル指定で 20 問のクイズデータを返す           |
+| =createUserFunction= | onCall (v2) | 必要     | Firestore にユーザードキュメントを作成する       |
+| =getUserFunction=   | onCall (v2)  | 必要     | Firestore からユーザー情報を取得する             |
+| =onUserCreatedTrigger= | Auth トリガー | ―     | Firebase Auth ユーザー作成時に Firestore へ自動登録 |
+
+-----
+
+* 3. getQuizFunction（主要 Function）
+
+クイズアプリのコア機能。ユーザー登録は存在しないため認証不要。
+
+** 3.1 呼び出し方法
+
+Firebase SDK の =httpsCallable= を使用して呼び出す。
+
+#+BEGIN_SRC typescript
+const getQuiz = httpsCallable(functions, "getQuizFunction");
+const result = await getQuiz({ levels: ["A", "C"] });
+#+END_SRC
+
+** 3.2 リクエスト
+
+#+BEGIN_SRC json
+{
+  "levels": ["A", "C"]
+}
+#+END_SRC
+
+| フィールド | 型         | 必須 | 説明                                           |
+|------------+------------+------+------------------------------------------------|
+| =levels=   | =string[]= | ○    | 取得するレベルの識別子。1 つ以上指定する。重複は自動除去。 |
+
+*** 有効なレベル識別子
+
+=A= / =B= / =C= / =D= / =E= / =F= / =G= / =H= / =I= / =J= / =K= / =L=（計 12 段階）
+
+** 3.3 レスポンス
+
+#+BEGIN_SRC json
+{
+  "questions": [
+    {
+      "order": 1,
+      "id": "a001",
+      "question": "3 + 5 = ?",
+      "answer_hash": "2c624232cdd221771294..."
+    },
+    {
+      "order": 2,
+      "id": "b014",
+      "question": "12 - 7 = ?",
+      "answer_hash": "ef2d127de37b942baad0..."
+    }
+  ]
+}
+#+END_SRC
+
+| フィールド    | 型       | 説明                                                    |
+|---------------+----------+---------------------------------------------------------|
+| =order=       | =number= | 問題の出題順（1 始まりの連番）                          |
+| =id=          | =string= | Storage JSON に定義された問題の固有 ID（そのまま転送）  |
+| =question=    | =string= | 問題文（そのまま表示する）                              |
+| =answer_hash= | =string= | 正解を SHA-256 でハッシュ化した hex 文字列（64 文字）   |
+
+*生の正解（=answer=）はレスポンスに含まれない。*
+
+** 3.4 エラーレスポンス
+
+| コード                | 発生条件                                                   |
+|-----------------------+------------------------------------------------------------|
+| =invalid-argument=    | =levels= が未指定・空配列・A〜L 以外の値・文字列以外を含む |
+| =failed-precondition= | 指定レベルの合計問題数が 20 問未満                         |
+
+** 3.5 内部処理フロー
+
+#+BEGIN_EXAMPLE
+1. 入力バリデーション（levels の型・値チェック、重複除去）
+2. 各レベルの JSON を Firebase Storage から並列取得（Promise.all）
+   └── キャッシュヒット時は Storage へのアクセスをスキップ
+3. 全レベルの問題プールを結合（Array.flat）
+4. プールが 20 問未満なら failed-precondition エラー
+5. Fisher-Yates シャッフル
+6. 先頭 20 問を抽出
+7. { order, id, question, answer_hash } にマッピングして返却
+   └── answer は SHA-256 ハッシュ化し、生の値はレスポンスに含めない
+#+END_EXAMPLE
+
+** 3.6 正誤判定（クライアント側）
+
+クイズ画面での正誤判定はサーバーを介さずクライアントで完結する。
+
+1. ユーザーが決定ボタンを押す
+2. 入力文字列をそのまま SHA-256 ハッシュ化する（約分・補正なし）
+3. =answer_hash= と突合し、一致すれば正解
+
+詳細は =app-design-spec.org= §5 を参照。
+
+-----
+
+* 4. Storage JSON 仕様
+
+** 4.1 ファイルパス
+
+#+BEGIN_EXAMPLE
+（Storage ルート）
+└── quiz/
+    ├── A_v1.json
+    ├── B_v1.json
+    ├── ...
+    └── L_v1.json
+#+END_EXAMPLE
+
+ファイル名末尾の =_v1= がバージョン識別子。問題データを更新する際は後述のキャッシュ破棄手順に従う。
+
+** 4.2 JSON フォーマット
+
+#+BEGIN_SRC json
+[
+  {
+    "id": "a001",
+    "question": "3 + 5 = ?",
+    "answer": "8"
+  },
+  {
+    "id": "a002",
+    "question": "1/2 + 1/3 = ?",
+    "answer": "5/6"
+  }
+]
+#+END_SRC
+
+| フィールド | 型       | 説明                                              |
+|------------+----------+---------------------------------------------------|
+| =id=       | =string= | 問題の固有 ID。レベル内でユニークにする            |
+| =question= | =string= | 問題文                                            |
+| =answer=   | =string= | *生の正解テキスト*。Function 側でハッシュ化される |
+
+** 4.3 answer の記述ルール
+
+クライアントの入力と完全一致させるため、*クレンジング済みの正規形* で記述する。
+
+| ケース     | 正しい書き方 | NG な書き方              |
+|------------+--------------+--------------------------|
+| 整数       | ="8"=        | ="8/1"=, ="+8"=          |
+| 既約分数   | ="5/6"=      | ="10/12"=, ="2/4"=       |
+| 負の数     | ="-3"=       | ="−3"=（全角マイナス）   |
+| 負の分数   | ="-2/5"=     | ="-4/10"=                |
+| ゼロ       | ="0"=        | ="-0"=                   |
+
+** 4.4 推奨問題数
+
+各ファイルに *30〜50 問以上* を推奨する。
+
+- 単一レベル指定時でも最低 20 問が必要（不足時は =failed-precondition= エラー）
+- 問題数が多いほどシャッフルの多様性が上がり、毎回異なる問題セットが出題される
+
+-----
+
+* 5. キャッシュ設計
+
+** 5.1 方針
+
+Cloud Functions のインスタンス永続性を利用し、一度 Storage からダウンロードした JSON をモジュールスコープの =Map= にキャッシュする。
+*TTL（有効期限）は設けない。* インスタンスが生きている限りキャッシュを使い続けることで Storage へのアクセスを最小化し、無料枠内に収める。
+
+** 5.2 キャッシュの破棄方法
+
+TTL による自動破棄は行わないため、問題データを更新した際は以下の手順でキャッシュを強制破棄する。
+
+1. Storage 上のファイル名のバージョンを上げる（例: =A_v1.json= → =A_v2.json=）
+2. =quizService.ts= の =FILE_VERSION= 定数を変更する（例: ="v1"= → ="v2"=）
+3. Functions を再デプロイする
+
+再デプロイにより新しいインスタンスが起動し、古いキャッシュは自動的に破棄される。
+
+#+BEGIN_SRC typescript
+// quizService.ts
+const FILE_VERSION = "v2"; // ← ここを変更してデプロイ
+#+END_SRC
+
+-----
+
+* 6. セキュリティ設計
+
+** 6.1 チート対策（メモリスキャン防止）
+
+- Storage JSON には生の正解を保持する
+- *クライアントには answer_hash（SHA-256 ハッシュ値）のみを渡す*
+- スマートフォンのメモリ上にも生の正解は存在しないため、メモリスキャンによる答えの自動割り出しが不可能
+
+** 6.2 ランキング不正防止（フッキング対策）
+
+- クライアントの正誤判定（ローカルハッシュ突合）はあくまで演出用
+- ランキング登録時はクライアントから「生の解答リスト」をサーバーに送信し、Functions 側で一から答え合わせを行う（未実装・今後の実装対象）
+- クライアント側の True/False 書き換えによるチートはランキング登録で完全に防御される
+
+-----
+
+* 7. テスト仕様
+
+** 7.1 テスト構成
+
+| ファイル                          | テスト数 | 対象                         |
+|-----------------------------------+----------+------------------------------|
+| =tests/handlers/quizHandlers.test.ts=  | 14       | handleGetQuiz（正常系・異常系）|
+| =tests/services/quizService.test.ts=   | 7        | fetchQuizData・hashAnswer    |
+| =tests/handlers/userHandlers.test.ts=  | 13       | handleCreateUser・handleGetUser |
+| =tests/services/userService.test.ts=   | 7        | createUser・getUserById      |
+| *合計*                            | *41*     |                              |
+
+** 7.2 主なテストケース（getQuiz）
+
+*** 正常系
+- 単一レベルで 20 問を返す
+- 複数レベルの問題をマージして 20 問返す
+- =order= が 1 始まりの連番になっている
+- =answer_hash= が SHA-256 の hex 文字列（64 文字）である
+- レスポンスに生の =answer= フィールドが含まれない
+- =id= が Storage の値そのままレスポンスに含まれる
+- 重複レベルは 1 回だけ取得する
+- Auth なしで正常に動作する
+
+*** 異常系
+- =levels= が未指定のとき =invalid-argument= を投げる
+- =levels= が空配列のとき =invalid-argument= を投げる
+- 無効なレベル名（='Z'=）のとき =invalid-argument= を投げる
+- 小文字（='a'=）のとき =invalid-argument= を投げる
+- =levels= に文字列型でない要素を含む場合 =invalid-argument= を投げる
+- プール合計が 20 問未満のとき =failed-precondition= を投げる
+
+** 7.3 テスト実行コマンド
+
+#+BEGIN_SRC bash
+# 全テスト実行
+just test
+
+# ウォッチモード
+just test-watch
+
+# カバレッジレポート付き
+just test-coverage
+#+END_SRC
