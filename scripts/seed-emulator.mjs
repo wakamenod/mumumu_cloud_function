@@ -19,7 +19,7 @@ process.env["FIREBASE_STORAGE_EMULATOR_HOST"] = "127.0.0.1:9199";
 // ─── 設定 ──────────────────────────────────────────────────────────────────
 const __dirname  = dirname(fileURLToPath(import.meta.url));
 const SEED_DIR   = join(__dirname, "../emulator-seed/quiz");
-const BUCKET_NAME = "mumumu-a278.appspot.com";
+const BUCKET_NAME = "mumumu-a278.firebasestorage.app";
 
 // ─── 初期化 ────────────────────────────────────────────────────────────────
 initializeApp({ storageBucket: BUCKET_NAME });
