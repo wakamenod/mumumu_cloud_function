@@ -116,6 +116,24 @@ describe("handleGetQuiz — 正常系", () => {
     // auth を一切渡さず data だけ渡しても動作することを確認
     await expect(handleGetQuiz({levels: ["A"]})).resolves.toBeDefined();
   });
+
+  it("最大レベル M を指定しても正常に動作する", async () => {
+    mockFetchQuizData.mockResolvedValue(makeQuestions(20, "M"));
+
+    const result = await handleGetQuiz({levels: ["M"]});
+
+    expect(result.questions).toHaveLength(20);
+  });
+
+  it("全 13 レベル（A〜M）を同時指定しても正常に動作する", async () => {
+    mockFetchQuizData.mockResolvedValue(makeQuestions(20, "Q"));
+
+    const allLevels = ["A","B","C","D","E","F","G","H","I","J","K","L","M"];
+    const result = await handleGetQuiz({levels: allLevels});
+
+    expect(result.questions).toHaveLength(20);
+    expect(mockFetchQuizData).toHaveBeenCalledTimes(13);
+  });
 });
 
 describe("handleGetQuiz — 異常系", () => {
@@ -137,6 +155,12 @@ describe("handleGetQuiz — 異常系", () => {
 
   it("無効なレベル名 ('Z') のとき invalid-argument を投げる", async () => {
     await expect(handleGetQuiz({levels: ["Z"]})).rejects.toMatchObject({
+      code: "invalid-argument",
+    });
+  });
+
+  it("'M' の次のレベル ('N') は invalid-argument を投げる", async () => {
+    await expect(handleGetQuiz({levels: ["N"]})).rejects.toMatchObject({
       code: "invalid-argument",
     });
   });
