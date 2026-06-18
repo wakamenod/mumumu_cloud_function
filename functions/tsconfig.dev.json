@@ -9,6 +9,7 @@
   },
   "include": [
     ".eslintrc.js",
+    "jest.config.ts",
     "src",
     "tests"
   ]

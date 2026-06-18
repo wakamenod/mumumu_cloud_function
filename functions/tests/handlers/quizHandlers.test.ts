@@ -22,7 +22,13 @@ import {handleGetQuiz} from "../../src/handlers/quizHandlers";
 // テストデータ生成ヘルパー
 // ---------------------------------------------------------------------------
 
-/** n 問分のダミー問題を生成する */
+/**
+ * n 問分のダミー問題を生成する
+ *
+ * @param {number} n - 生成する問題数
+ * @param {string} prefix - 問題 ID のプレフィックス
+ * @return {object[]} ダミー問題の配列
+ */
 function makeQuestions(n: number, prefix = "Q") {
   return Array.from({length: n}, (_, i) => ({
     id: `${prefix.toLowerCase()}${String(i + 1).padStart(3, "0")}`,
@@ -128,7 +134,9 @@ describe("handleGetQuiz — 正常系", () => {
   it("全 13 レベル（A〜M）を同時指定しても正常に動作する", async () => {
     mockFetchQuizData.mockResolvedValue(makeQuestions(20, "Q"));
 
-    const allLevels = ["A","B","C","D","E","F","G","H","I","J","K","L","M"];
+    const allLevels = [
+      "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+    ];
     const result = await handleGetQuiz({levels: allLevels});
 
     expect(result.questions).toHaveLength(20);

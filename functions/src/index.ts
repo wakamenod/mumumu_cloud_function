@@ -34,8 +34,12 @@ export const helloWorld = onRequest((request, response) => {
  * リクエスト形式: { levels: string[] }  例: { levels: ["A", "C"] }
  * レスポンス形式: { questions: Array<{ order, id, question, answer_hash }> }
  */
+// ローカルエミュレーター時は App Check を無効化する
+// FUNCTIONS_EMULATOR は Firebase エミュレーターが自動でセットする環境変数
+const isEmulator = process.env.FUNCTIONS_EMULATOR === "true";
+
 export const getQuizFunction = onCall(
-  {enforceAppCheck: true},
+  {enforceAppCheck: !isEmulator},
   async (request) => {
     return handleGetQuiz(request.data);
   }

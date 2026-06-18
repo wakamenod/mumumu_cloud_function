@@ -1,5 +1,9 @@
 import {HttpsError} from "firebase-functions/v2/https";
-import {fetchQuizData, hashAnswer, QuizQuestion} from "../services/quizService.js";
+import {
+  fetchQuizData,
+  hashAnswer,
+  QuizQuestion,
+} from "../services/quizService.js";
 
 // ---------------------------------------------------------------------------
 // 定数
@@ -20,6 +24,9 @@ const VALID_LEVELS = new Set([
 /**
  * Fisher-Yates シャッフル（in-place）。
  * 配列の要素をランダムな順序に並び替える。
+ *
+ * @param {T[]} array - シャッフル対象の配列
+ * @return {T[]} シャッフル後の配列（同一参照）
  */
 function shuffleArray<T>(array: T[]): T[] {
   for (let i = array.length - 1; i > 0; i--) {
@@ -40,8 +47,8 @@ function shuffleArray<T>(array: T[]): T[] {
  * シャッフル後の先頭 20 問を返す。
  * 認証不要（ユーザー登録なし）。
  *
- * @param data - クライアントから受け取った入力データ
- * @returns { questions: QuizQuestion[] } — 20 問分のクイズデータ
+ * @param {unknown} data - クライアントから受け取った入力データ
+ * @return {{ questions: QuizQuestion[] }} 20 問分のクイズデータ
  */
 export async function handleGetQuiz(
   data: unknown,
@@ -73,7 +80,7 @@ export async function handleGetQuiz(
       throw new HttpsError(
         "invalid-argument",
         `無効なレベル "${String(level)}" が含まれています。` +
-          " 有効な値は A 〜 L です。",
+          " 有効な値は A 〜 M です。",
       );
     }
   }
@@ -92,7 +99,7 @@ export async function handleGetQuiz(
   if (pool.length < QUESTION_COUNT) {
     throw new HttpsError(
       "failed-precondition",
-      `問題数が不足しています。` +
+      "問題数が不足しています。" +
         ` 指定レベルの合計問題数: ${pool.length} / 必要数: ${QUESTION_COUNT}`,
     );
   }
