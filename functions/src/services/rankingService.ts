@@ -39,6 +39,11 @@ export interface RegisterUsernameResult {
   username: string;
 }
 
+/** getRanking の戻り値 */
+export interface GetRankingResult {
+  rankings: RankingDisplayEntry[];
+}
+
 /**
  * ランキング操作で発生するドメインエラー。
  * ハンドラー側で HttpsError に変換する。
@@ -195,6 +200,28 @@ export async function registerUsername(
   });
 
   return result;
+}
+
+/**
+ * 指定レベルのランキング一覧を取得する。
+ *
+ * Firestore の /rankings/level_{level} を単純 read し、
+ * claim_token を除外した表示用エントリ配列を返す。
+ * ドキュメントが存在しない場合は空配列を返す（エラーにしない）。
+ *
+ * @param {string} level - レベル識別子（A〜M）
+ * @return {Promise<GetRankingResult>} 最新の上位 20 件（claim_token 除外済み）
+ */
+export async function getRanking(level: string): Promise<GetRankingResult> {
+  const db = getFirestore();
+  const docRef = db.collection("rankings").doc(`level_${level}`);
+  const snapshot = await docRef.get();
+
+  const scores: RankingEntry[] = snapshot.exists
+    ? (snapshot.data()?.scores ?? [])
+    : [];
+
+  return {rankings: toDisplayEntries(scores)};
 }
 
 export async function submitScore(

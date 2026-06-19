@@ -1,6 +1,7 @@
 import {
   submitScore,
   registerUsername,
+  getRanking,
   RankingError,
 } from "../../src/services/rankingService.js";
 
@@ -10,6 +11,7 @@ import {
 
 const mockRunTransaction = jest.fn();
 const mockGet = jest.fn();
+const mockDocGet = jest.fn(); // docRef.get() 用（getRanking で使用）
 const mockUpdate = jest.fn();
 const mockSet = jest.fn();
 
@@ -20,7 +22,7 @@ jest.mock("firebase-admin/firestore", () => {
     ...actual,
     getFirestore: jest.fn(() => ({
       collection: jest.fn(() => ({
-        doc: jest.fn(() => "mockDocRef"),
+        doc: jest.fn(() => ({get: mockDocGet})),
       })),
       runTransaction: mockRunTransaction,
     })),
@@ -392,5 +394,86 @@ describe("registerUsername", () => {
 
     expect(caught).toBeInstanceOf(RankingError);
     expect(caught).toBeInstanceOf(Error);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getRanking テスト
+// ---------------------------------------------------------------------------
+
+describe("getRanking", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  // --- 正常系 ---
+
+  test("ドキュメントが存在する場合、RankingDisplayEntry の配列を返す", async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        scores: [
+          makeEntry(20, 30.1),
+          makeEntry(20, 35.2),
+          makeEntry(18, 52.4),
+        ],
+      }),
+    });
+
+    const result = await getRanking("A");
+
+    expect(result.rankings).toHaveLength(3);
+    expect(result.rankings[0]).toMatchObject({rank: 1, correct_count: 20, elapsed_time: 30.1});
+    expect(result.rankings[1]).toMatchObject({rank: 2, correct_count: 20, elapsed_time: 35.2});
+    expect(result.rankings[2]).toMatchObject({rank: 3, correct_count: 18, elapsed_time: 52.4});
+  });
+
+  test("ドキュメントが存在しない場合、空配列を返す", async () => {
+    mockDocGet.mockResolvedValue({
+      exists: false,
+      data: () => undefined,
+    });
+
+    const result = await getRanking("A");
+
+    expect(result.rankings).toEqual([]);
+  });
+
+  test("rankings に claim_token が含まれない", async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        scores: [
+          {
+            username: "AAAAA",
+            correct_count: 20,
+            elapsed_time: 30.1,
+            created_at: {toMillis: () => 1718268420000},
+            claim_token: "550e8400-e29b-41d4-a716-446655440000",
+          },
+        ],
+      }),
+    });
+
+    const result = await getRanking("A");
+
+    expect(result.rankings).toHaveLength(1);
+    for (const entry of result.rankings) {
+      expect(entry).not.toHaveProperty("claim_token");
+    }
+  });
+
+  test("rankings に 1 始まりの rank が付与される", async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        scores: [makeEntry(20, 30.1), makeEntry(18, 52.4)],
+      }),
+    });
+
+    const result = await getRanking("A");
+
+    expect(result.rankings[0].rank).toBe(1);
+    expect(result.rankings[1].rank).toBe(2);
   });
 });

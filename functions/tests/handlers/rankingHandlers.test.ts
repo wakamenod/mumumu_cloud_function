@@ -1,6 +1,7 @@
 import {
   handleSubmitScore,
   handleRegisterUsername,
+  handleGetRanking,
 } from "../../src/handlers/rankingHandlers.js";
 
 // ---------------------------------------------------------------------------
@@ -16,6 +17,7 @@ jest.mock("../../src/services/quizService.js", () => ({
 jest.mock("../../src/services/rankingService.js", () => ({
   submitScore: jest.fn(),
   registerUsername: jest.fn(),
+  getRanking: jest.fn(),
   RankingError: class RankingError extends Error {
     constructor(
       public readonly code: string,
@@ -33,6 +35,7 @@ const {fetchQuizData: mockFetchQuizData} = require("../../src/services/quizServi
 const {
   submitScore: mockSubmitScore,
   registerUsername: mockRegisterUsername,
+  getRanking: mockGetRanking,
   RankingError: MockRankingError,
 } = require("../../src/services/rankingService.js");
 
@@ -352,5 +355,79 @@ describe("handleRegisterUsername", () => {
     await expect(
       handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: VALID_USERNAME}),
     ).rejects.toThrow("Unexpected");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleGetRanking テスト
+// ---------------------------------------------------------------------------
+
+/** ランキング表示用エントリのサンプル */
+const sampleRankings = [
+  {rank: 1, username: "BBBBB", correct_count: 20, elapsed_time: 30.1},
+  {rank: 2, username: "CCCCC", correct_count: 20, elapsed_time: 35.2},
+  {rank: 3, username: "DDDDD", correct_count: 18, elapsed_time: 52.4},
+];
+
+describe("handleGetRanking", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetRanking.mockResolvedValue({rankings: sampleRankings});
+  });
+
+  // --- 正常系 ---
+
+  test("正常なリクエストで getRanking を呼び出しランキング一覧を返す", async () => {
+    const result = await handleGetRanking({level: VALID_LEVEL});
+
+    expect(result.rankings).toEqual(sampleRankings);
+    expect(mockGetRanking).toHaveBeenCalledWith(VALID_LEVEL);
+  });
+
+  test("ドキュメント未存在時（空配列）も正常に返す", async () => {
+    mockGetRanking.mockResolvedValue({rankings: []});
+
+    const result = await handleGetRanking({level: VALID_LEVEL});
+
+    expect(result.rankings).toEqual([]);
+    expect(mockGetRanking).toHaveBeenCalledWith(VALID_LEVEL);
+  });
+
+  // --- invalid-argument: level ---
+
+  test("level が未指定のとき invalid-argument を投げる", async () => {
+    await expect(handleGetRanking({})).rejects.toMatchObject({
+      code: "invalid-argument",
+    });
+  });
+
+  test("level が空文字のとき invalid-argument を投げる", async () => {
+    await expect(handleGetRanking({level: ""})).rejects.toMatchObject({
+      code: "invalid-argument",
+    });
+  });
+
+  test("level が無効な文字列（'Z'）のとき invalid-argument を投げる", async () => {
+    await expect(handleGetRanking({level: "Z"})).rejects.toMatchObject({
+      code: "invalid-argument",
+    });
+  });
+
+  test("level が小文字（'a'）のとき invalid-argument を投げる", async () => {
+    await expect(handleGetRanking({level: "a"})).rejects.toMatchObject({
+      code: "invalid-argument",
+    });
+  });
+
+  test("level が数値のとき invalid-argument を投げる", async () => {
+    await expect(handleGetRanking({level: 1})).rejects.toMatchObject({
+      code: "invalid-argument",
+    });
+  });
+
+  test("data が null のとき invalid-argument を投げる", async () => {
+    await expect(handleGetRanking(null)).rejects.toMatchObject({
+      code: "invalid-argument",
+    });
   });
 });

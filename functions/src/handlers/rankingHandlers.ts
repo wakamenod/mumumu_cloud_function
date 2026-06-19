@@ -5,6 +5,8 @@ import {
   SubmitScoreResult,
   registerUsername,
   RegisterUsernameResult,
+  getRanking,
+  GetRankingResult,
   RankingError,
 } from "../services/rankingService.js";
 
@@ -184,4 +186,39 @@ export async function handleRegisterUsername(
     }
     throw e;
   }
+}
+
+/**
+ * ランキング一覧取得ハンドラー。
+ *
+ * 1. 入力バリデーション（level: A〜M）
+ * 2. getRanking() で Firestore から最新のランキングデータを取得して返す
+ *
+ * @param {unknown} data - クライアントから受け取った入力データ
+ * @return {Promise<GetRankingResult>} 最新の上位 20 件（claim_token 除外済み）
+ */
+export async function handleGetRanking(
+  data: unknown,
+): Promise<GetRankingResult> {
+  // --- 入力バリデーション ---
+  if (!data || typeof data !== "object") {
+    throw new HttpsError(
+      "invalid-argument",
+      "リクエストボディが不正です。",
+    );
+  }
+
+  const d = data as Record<string, unknown>;
+
+  // level
+  if (typeof d.level !== "string" || !VALID_LEVELS.has(d.level)) {
+    throw new HttpsError(
+      "invalid-argument",
+      `無効なレベル "${String(d.level)}" です。有効な値は A 〜 M です。`,
+    );
+  }
+  const level = d.level;
+
+  // --- Firestore からランキング一覧を取得 ---
+  return getRanking(level);
 }

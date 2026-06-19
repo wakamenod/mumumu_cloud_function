@@ -59,6 +59,7 @@ index.ts（Function の登録・エクスポート）
 | =getQuizFunction=         | onCall (v2) | 強制      | レベル指定で 20 問のクイズデータを返す         |
 | =submitScoreFunction=     | onCall (v2) | 強制      | スコアを検証しランキングに仮登録する           |
 | =registerUsernameFunction= | onCall (v2) | 強制      | claimToken を検証しユーザー名を本登録する      |
+| =getRankingFunction=      | onCall (v2) | 強制      | レベル指定でランキング一覧（上位 20 件）を返す |
 
 -----
 
@@ -497,17 +498,88 @@ const result = await registerUsername({
 
 -----
 
-* 9. テスト仕様
+* 9. getRankingFunc（ランキング一覧取得 Function）
 
-** 9.1 テスト構成
+指定したレベルの最新ランキング上位 20 件を返す。
+ユーザー認証不要。=claim_token= はレスポンスに含まれない。
 
-| ファイル                               | テスト数 | 対象                            |
-|----------------------------------------+----------+---------------------------------|
-| =tests/handlers/quizHandlers.test.ts=  | 14       | handleGetQuiz（正常系・異常系） |
-| =tests/services/quizService.test.ts=   | 7        | fetchQuizData・hashAnswer       |
-| *合計*                                 | *21*     |                                 |
+** 9.1 呼び出し方法
 
-** 9.2 主なテストケース（getQuiz）
+#+BEGIN_SRC typescript
+const getRanking = httpsCallable(functions, "getRankingFunction");
+const result = await getRanking({ level: "A" });
+#+END_SRC
+
+** 9.2 リクエスト
+
+#+BEGIN_SRC json
+{
+  "level": "A"
+}
+#+END_SRC
+
+| フィールド | 型       | 必須 | 説明                           |
+|------------+----------+------+--------------------------------|
+| =level=    | =string= | ○    | 取得するレベルの識別子（A〜M） |
+
+** 9.3 レスポンス
+
+#+BEGIN_SRC json
+{
+  "rankings": [
+    { "rank": 1, "username": "BBBBB", "correct_count": 20, "elapsed_time": 30.1 },
+    { "rank": 2, "username": "CCCCC", "correct_count": 20, "elapsed_time": 35.2 },
+    { "rank": 3, "username": "-----", "correct_count": 18, "elapsed_time": 52.4 }
+  ]
+}
+#+END_SRC
+
+| フィールド      | 型               | 説明                                              |
+|-----------------+------------------+---------------------------------------------------|
+| =rankings=      | =RankingEntry[]= | 最新の上位 20 件。=claim_token= は除外済み        |
+
+*** =rankings= の各エントリ
+
+| フィールド      | 型       | 説明                                                          |
+|-----------------+----------+---------------------------------------------------------------|
+| =rank=          | =number= | 順位（1〜20）                                                 |
+| =username=      | =string= | ユーザー名。未登録エントリは ="-----"= と表示される           |
+| =correct_count= | =number= | 正解数                                                        |
+| =elapsed_time=  | =number= | 経過時間（秒）                                                |
+
+ランキングデータが存在しない場合（誰もプレイしていない）は =rankings: []= を返す（エラーにしない）。
+
+** 9.4 エラーレスポンス
+
+| コード             | 発生条件                                    |
+|--------------------+---------------------------------------------|
+| =invalid-argument= | =level= が未指定・A〜M 以外・文字列以外     |
+
+** 9.5 内部処理フロー
+
+#+BEGIN_EXAMPLE
+1. 入力バリデーション（level の型・値チェック）
+2. Firestore の /rankings/level_{level} を read（Transaction 不要・単純 get）
+   └── ドキュメントが存在しない場合は空配列として扱う
+3. claim_token を除外し、1 始まりの rank を付与した表示用エントリ配列を生成
+4. { rankings } を返す
+#+END_EXAMPLE
+
+-----
+
+* 10. テスト仕様
+
+** 10.1 テスト構成
+
+| ファイル                                 | テスト数 | 対象                                       |
+|------------------------------------------+----------+--------------------------------------------|
+| =tests/handlers/quizHandlers.test.ts=    | 14       | handleGetQuiz（正常系・異常系）            |
+| =tests/services/quizService.test.ts=     | 7        | fetchQuizData・hashAnswer                  |
+| =tests/handlers/rankingHandlers.test.ts= | 22       | handleSubmitScore・handleRegisterUsername・handleGetRanking |
+| =tests/services/rankingService.test.ts=  | 20       | submitScore・registerUsername・getRanking  |
+| *合計*                                   | *63*     |                                            |
+
+** 10.2 主なテストケース（getQuiz）
 
 *** 正常系
 - 単一レベルで 20 問を返す
@@ -527,7 +599,7 @@ const result = await registerUsername({
 - =levels= に文字列型でない要素を含む場合 =invalid-argument= を投げる
 - プール合計が 20 問未満のとき =failed-precondition= を投げる
 
-** 9.3 テスト実行コマンド
+** 10.3 テスト実行コマンド
 
 #+BEGIN_SRC bash
 # 全テスト実行
