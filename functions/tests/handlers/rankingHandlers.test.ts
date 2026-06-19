@@ -1,4 +1,7 @@
-import {handleSubmitScore} from "../../src/handlers/rankingHandlers.js";
+import {
+  handleSubmitScore,
+  handleRegisterUsername,
+} from "../../src/handlers/rankingHandlers.js";
 
 // ---------------------------------------------------------------------------
 // モック
@@ -12,12 +15,26 @@ jest.mock("../../src/services/quizService.js", () => ({
 
 jest.mock("../../src/services/rankingService.js", () => ({
   submitScore: jest.fn(),
+  registerUsername: jest.fn(),
+  RankingError: class RankingError extends Error {
+    constructor(
+      public readonly code: string,
+      message: string,
+    ) {
+      super(message);
+      this.name = "RankingError";
+    }
+  },
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const {fetchQuizData: mockFetchQuizData} = require("../../src/services/quizService.js");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const {submitScore: mockSubmitScore} = require("../../src/services/rankingService.js");
+const {
+  submitScore: mockSubmitScore,
+  registerUsername: mockRegisterUsername,
+  RankingError: MockRankingError,
+} = require("../../src/services/rankingService.js");
 
 // ---------------------------------------------------------------------------
 // テスト用定数
@@ -204,5 +221,136 @@ describe("handleSubmitScore", () => {
         startedAt: validStartedAt,
       }),
     ).rejects.toMatchObject({code: "not-found"});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleRegisterUsername テスト
+// ---------------------------------------------------------------------------
+
+const VALID_TOKEN = "550e8400-e29b-41d4-a716-446655440000";
+const VALID_USERNAME = "HELLO";
+
+describe("handleRegisterUsername", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockRegisterUsername.mockResolvedValue({
+      success: true,
+      rank: 3,
+      username: VALID_USERNAME,
+    });
+  });
+
+  // --- 正常系 ---
+
+  test("正常なリクエストで registerUsername を呼び出し結果を返す", async () => {
+    const result = await handleRegisterUsername({
+      level: VALID_LEVEL,
+      claimToken: VALID_TOKEN,
+      username: VALID_USERNAME,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.rank).toBe(3);
+    expect(result.username).toBe(VALID_USERNAME);
+    expect(mockRegisterUsername).toHaveBeenCalledWith(
+      VALID_LEVEL,
+      VALID_TOKEN,
+      VALID_USERNAME,
+    );
+  });
+
+  // --- invalid-argument: level ---
+
+  test("level が未指定のとき invalid-argument を投げる", async () => {
+    await expect(
+      handleRegisterUsername({claimToken: VALID_TOKEN, username: VALID_USERNAME}),
+    ).rejects.toMatchObject({code: "invalid-argument"});
+  });
+
+  test("level が無効のとき invalid-argument を投げる", async () => {
+    await expect(
+      handleRegisterUsername({level: "Z", claimToken: VALID_TOKEN, username: VALID_USERNAME}),
+    ).rejects.toMatchObject({code: "invalid-argument"});
+  });
+
+  // --- invalid-argument: claimToken ---
+
+  test("claimToken が未指定のとき invalid-argument を投げる", async () => {
+    await expect(
+      handleRegisterUsername({level: VALID_LEVEL, username: VALID_USERNAME}),
+    ).rejects.toMatchObject({code: "invalid-argument"});
+  });
+
+  test("claimToken が UUID v4 形式でないとき invalid-argument を投げる", async () => {
+    await expect(
+      handleRegisterUsername({level: VALID_LEVEL, claimToken: "not-a-uuid", username: VALID_USERNAME}),
+    ).rejects.toMatchObject({code: "invalid-argument"});
+  });
+
+  test("claimToken が UUID v1 形式のとき invalid-argument を投げる", async () => {
+    await expect(
+      handleRegisterUsername({
+        level: VALID_LEVEL,
+        claimToken: "6ba7b810-9dad-11d1-80b4-00c04fd430c8", // v1 // gitleaks:allow
+        username: VALID_USERNAME,
+      }),
+    ).rejects.toMatchObject({code: "invalid-argument"});
+  });
+
+  // --- invalid-argument: username ---
+
+  test("username が 5 文字未満のとき invalid-argument を投げる", async () => {
+    await expect(
+      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: "HI"}),
+    ).rejects.toMatchObject({code: "invalid-argument"});
+  });
+
+  test("username が 6 文字以上のとき invalid-argument を投げる", async () => {
+    await expect(
+      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: "TOOLONG"}),
+    ).rejects.toMatchObject({code: "invalid-argument"});
+  });
+
+  test("username に小文字が含まれるとき invalid-argument を投げる", async () => {
+    await expect(
+      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: "Hello"}),
+    ).rejects.toMatchObject({code: "invalid-argument"});
+  });
+
+  test("username に記号が含まれるとき invalid-argument を投げる", async () => {
+    await expect(
+      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: "HE!LO"}),
+    ).rejects.toMatchObject({code: "invalid-argument"});
+  });
+
+  // --- RankingError の伝播 ---
+
+  test("registerUsername が not-found を投げたとき HttpsError(not-found) に変換される", async () => {
+    mockRegisterUsername.mockRejectedValue(
+      new MockRankingError("not-found", "Token not found"),
+    );
+
+    await expect(
+      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: VALID_USERNAME}),
+    ).rejects.toMatchObject({code: "not-found"});
+  });
+
+  test("registerUsername が deadline-exceeded を投げたとき HttpsError(deadline-exceeded) に変換される", async () => {
+    mockRegisterUsername.mockRejectedValue(
+      new MockRankingError("deadline-exceeded", "TTL exceeded"),
+    );
+
+    await expect(
+      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: VALID_USERNAME}),
+    ).rejects.toMatchObject({code: "deadline-exceeded"});
+  });
+
+  test("予期しない Error はそのまま再スローされる", async () => {
+    mockRegisterUsername.mockRejectedValue(new Error("Unexpected"));
+
+    await expect(
+      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: VALID_USERNAME}),
+    ).rejects.toThrow("Unexpected");
   });
 });

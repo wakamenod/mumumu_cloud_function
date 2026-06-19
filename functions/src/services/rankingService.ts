@@ -32,6 +32,27 @@ export interface SubmitScoreResult {
   rankings: RankingDisplayEntry[];
 }
 
+/** registerUsername の戻り値 */
+export interface RegisterUsernameResult {
+  success: boolean;
+  rank: number;
+  username: string;
+}
+
+/**
+ * ランキング操作で発生するドメインエラー。
+ * ハンドラー側で HttpsError に変換する。
+ */
+export class RankingError extends Error {
+  constructor(
+    public readonly code: "not-found" | "deadline-exceeded",
+    message: string,
+  ) {
+    super(message);
+    this.name = "RankingError";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 定数
 // ---------------------------------------------------------------------------
@@ -41,6 +62,9 @@ const RANKING_LIMIT = 20;
 
 /** username の初期値（ユーザー名登録前のプレースホルダー） */
 const USERNAME_PLACEHOLDER = "-----";
+
+/** claimToken の有効期限（ミリ秒）*/
+const CLAIM_TOKEN_TTL_MS = 10 * 60 * 1000; // 10分
 
 // ---------------------------------------------------------------------------
 // ユーティリティ
@@ -104,6 +128,75 @@ function toDisplayEntries(scores: RankingEntry[]): RankingDisplayEntry[] {
  * @param {number} elapsedTime - サーバー側で算出した経過時間（秒）
  * @return {Promise<SubmitScoreResult>} ランクイン結果・claimToken・最新ランキング
  */
+/**
+ * claimToken を検証し、ランキングエントリにユーザー名を本登録する。
+ *
+ * Firestore Transaction で /rankings/level_{level} を read し、
+ * claimToken が一致するエントリを探して username を上書き・claim_token を null にする。
+ * 同じ claimToken での二重登録は claim_token: null への書き換え後に not-found となり防止される。
+ *
+ * @param {string} level - レベル識別子（A〜M）
+ * @param {string} claimToken - submitScoreFunction が返した UUID v4
+ * @param {string} username - 登録するユーザー名（5文字・英大文字）
+ * @return {Promise<RegisterUsernameResult>} 登録結果と確定順位
+ * @throws {RankingError} not-found / deadline-exceeded
+ */
+export async function registerUsername(
+  level: string,
+  claimToken: string,
+  username: string,
+): Promise<RegisterUsernameResult> {
+  const db = getFirestore();
+  const docRef = db.collection("rankings").doc(`level_${level}`);
+
+  let result: RegisterUsernameResult = {success: false, rank: 0, username};
+
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(docRef);
+
+    const scores: RankingEntry[] = snapshot.exists
+      ? (snapshot.data()?.scores ?? [])
+      : [];
+
+    // claimToken が一致するエントリを検索
+    const entryIndex = scores.findIndex(
+      (e) => e.claim_token === claimToken,
+    );
+
+    if (entryIndex === -1) {
+      throw new RankingError(
+        "not-found",
+        "claimToken に一致するエントリが見つかりません。無効・既使用・期限切れの可能性があります。",
+      );
+    }
+
+    // TTL チェック（created_at から 10 分以内か）
+    const entry = scores[entryIndex];
+    const elapsedMs = Date.now() - entry.created_at.toMillis();
+
+    if (elapsedMs > CLAIM_TOKEN_TTL_MS) {
+      throw new RankingError(
+        "deadline-exceeded",
+        `claimToken の有効期限（10分）を超過しています（経過: ${Math.floor(elapsedMs / 1000)} 秒）。`,
+      );
+    }
+
+    // username を上書き・claim_token を null にして単一利用を保証
+    const updated = scores.map((e, i) =>
+      i === entryIndex
+        ? {...e, username, claim_token: null}
+        : e,
+    );
+
+    transaction.update(docRef, {scores: updated});
+
+    const rank = entryIndex + 1;
+    result = {success: true, rank, username};
+  });
+
+  return result;
+}
+
 export async function submitScore(
   level: string,
   correctCount: number,

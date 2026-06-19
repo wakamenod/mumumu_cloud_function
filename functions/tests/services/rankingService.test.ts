@@ -1,4 +1,8 @@
-import {submitScore} from "../../src/services/rankingService.js";
+import {
+  submitScore,
+  registerUsername,
+  RankingError,
+} from "../../src/services/rankingService.js";
 
 // ---------------------------------------------------------------------------
 // Firestore モック
@@ -254,5 +258,139 @@ describe("submitScore", () => {
     expect(result.rankings).toHaveLength(1);
     expect(result.rankings[0].rank).toBe(1);
     expect(result.rankings[0].username).toBe("-----");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// registerUsername テスト
+// ---------------------------------------------------------------------------
+
+const VALID_TOKEN = "550e8400-e29b-41d4-a716-446655440000";
+const RECENT_MS = Date.now() - 60_000; // 1 分前（TTL 内）
+const EXPIRED_MS = Date.now() - 11 * 60 * 1000; // 11 分前（TTL 超過）
+
+/** claim_token 付きエントリのファクトリ */
+function makeEntryWithToken(
+  claimToken: string | null,
+  createdAtMs = RECENT_MS,
+) {
+  return {
+    username: "-----",
+    correct_count: 18,
+    elapsed_time: 52.4,
+    created_at: {toMillis: () => createdAtMs},
+    claim_token: claimToken,
+  };
+}
+
+describe("registerUsername", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  // --- 正常系 ---
+
+  test("claimToken が一致するエントリの username を更新して rank を返す", async () => {
+    setupTransaction(true, [makeEntryWithToken(VALID_TOKEN)]);
+
+    const result = await registerUsername("A", VALID_TOKEN, "HELLO");
+
+    expect(result.success).toBe(true);
+    expect(result.rank).toBe(1);
+    expect(result.username).toBe("HELLO");
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  test("複数エントリ中の正しいエントリだけ更新される", async () => {
+    const OTHER_TOKEN = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"; // gitleaks:allow
+    setupTransaction(true, [
+      makeEntryWithToken(OTHER_TOKEN),
+      makeEntryWithToken(VALID_TOKEN),
+    ]);
+
+    const result = await registerUsername("A", VALID_TOKEN, "WORLD");
+
+    expect(result.rank).toBe(2);
+    const updatedScores = mockUpdate.mock.calls[0][1]
+      .scores as Array<{username: string; claim_token: string | null}>;
+    expect(updatedScores[0].username).toBe("-----"); // 変更なし
+    expect(updatedScores[1].username).toBe("WORLD"); // 更新
+  });
+
+  test("username 登録後に claim_token が null になる（単一利用保証）", async () => {
+    setupTransaction(true, [makeEntryWithToken(VALID_TOKEN)]);
+
+    await registerUsername("A", VALID_TOKEN, "HELLO");
+
+    const updatedScores = mockUpdate.mock.calls[0][1]
+      .scores as Array<{claim_token: string | null}>;
+    expect(updatedScores[0].claim_token).toBeNull();
+  });
+
+  // --- not-found ---
+
+  test("claimToken が一致するエントリがない場合は RankingError(not-found) を投げる", async () => {
+    setupTransaction(true, [makeEntryWithToken("different-token-xxxx")]);
+
+    await expect(
+      registerUsername("A", VALID_TOKEN, "HELLO"),
+    ).rejects.toMatchObject({
+      name: "RankingError",
+      code: "not-found",
+    });
+  });
+
+  test("claim_token が null（既使用）のエントリは not-found を投げる", async () => {
+    setupTransaction(true, [makeEntryWithToken(null)]);
+
+    await expect(
+      registerUsername("A", VALID_TOKEN, "HELLO"),
+    ).rejects.toMatchObject({
+      name: "RankingError",
+      code: "not-found",
+    });
+  });
+
+  test("ドキュメントが存在しない場合は not-found を投げる", async () => {
+    setupTransaction(false, []);
+
+    await expect(
+      registerUsername("A", VALID_TOKEN, "HELLO"),
+    ).rejects.toMatchObject({
+      name: "RankingError",
+      code: "not-found",
+    });
+  });
+
+  // --- deadline-exceeded ---
+
+  test("TTL（10分）を超過した claimToken は deadline-exceeded を投げる", async () => {
+    setupTransaction(true, [makeEntryWithToken(VALID_TOKEN, EXPIRED_MS)]);
+
+    await expect(
+      registerUsername("A", VALID_TOKEN, "HELLO"),
+    ).rejects.toMatchObject({
+      name: "RankingError",
+      code: "deadline-exceeded",
+    });
+
+    // TTL 超過時は書き込みを行わない
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  // --- エラー型確認 ---
+
+  test("RankingError は Error のインスタンスである", async () => {
+    setupTransaction(true, [makeEntryWithToken("no-match")]);
+
+    let caught: unknown;
+    try {
+      await registerUsername("A", VALID_TOKEN, "HELLO");
+    } catch (e) {
+      caught = e;
+    }
+
+    expect(caught).toBeInstanceOf(RankingError);
+    expect(caught).toBeInstanceOf(Error);
   });
 });

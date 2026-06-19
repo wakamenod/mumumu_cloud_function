@@ -4,7 +4,7 @@ import {onRequest} from "firebase-functions/https";
 import {onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {handleGetQuiz} from "./handlers/quizHandlers.js";
-import {handleSubmitScore} from "./handlers/rankingHandlers.js";
+import {handleSubmitScore, handleRegisterUsername} from "./handlers/rankingHandlers.js";
 
 // Firebase Admin SDK の初期化
 admin.initializeApp();
@@ -59,5 +59,20 @@ export const submitScoreFunction = onCall(
   {enforceAppCheck: !isEmulator},
   async (request) => {
     return handleSubmitScore(request.data);
+  }
+);
+
+/**
+ * onCall: registerUsername
+ * submitScoreFunction が返した claimToken を検証し、ランキングエントリにユーザー名を本登録する。
+ * 第三者による不正な書き換えをワンタイムトークン（TTL 10分・単一利用）で防止する。
+ *
+ * リクエスト形式: { level: string, claimToken: string, username: string }
+ * レスポンス形式: { success, rank, username }
+ */
+export const registerUsernameFunction = onCall(
+  {enforceAppCheck: !isEmulator},
+  async (request) => {
+    return handleRegisterUsername(request.data);
   }
 );

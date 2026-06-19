@@ -1,6 +1,12 @@
 import {HttpsError} from "firebase-functions/v2/https";
 import {fetchQuizData} from "../services/quizService.js";
-import {submitScore, SubmitScoreResult} from "../services/rankingService.js";
+import {
+  submitScore,
+  SubmitScoreResult,
+  registerUsername,
+  RegisterUsernameResult,
+  RankingError,
+} from "../services/rankingService.js";
 
 // ---------------------------------------------------------------------------
 // 定数
@@ -19,6 +25,13 @@ const VALID_LEVELS = new Set([
  * elapsed_time < QUESTION_COUNT * MIN_SECONDS_PER_QUESTION の場合は異常とみなす。
  */
 const MIN_SECONDS_PER_QUESTION = 0.5;
+
+/** UUID v4 の正規表現 */
+const UUID_V4_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** username の正規表現（5文字・英大文字） */
+const USERNAME_REGEX = /^[A-Z]{5}$/;
 
 // ---------------------------------------------------------------------------
 // ハンドラー
@@ -110,4 +123,65 @@ export async function handleSubmitScore(
 
   // --- Firestore Transaction でランキングに仮登録 ---
   return submitScore(level, correctCount, elapsedTime);
+}
+
+/**
+ * ユーザー名本登録ハンドラー。
+ *
+ * 1. 入力バリデーション（level / claimToken / username）
+ * 2. registerUsername() で claimToken を検証し username を書き込む
+ * 3. RankingError を HttpsError に変換して返す
+ *
+ * @param {unknown} data - クライアントから受け取った入力データ
+ * @return {Promise<RegisterUsernameResult>} 登録結果と確定順位
+ */
+export async function handleRegisterUsername(
+  data: unknown,
+): Promise<RegisterUsernameResult> {
+  // --- 入力バリデーション ---
+  if (!data || typeof data !== "object") {
+    throw new HttpsError(
+      "invalid-argument",
+      "リクエストボディが不正です。",
+    );
+  }
+
+  const d = data as Record<string, unknown>;
+
+  // level
+  if (typeof d.level !== "string" || !VALID_LEVELS.has(d.level)) {
+    throw new HttpsError(
+      "invalid-argument",
+      `無効なレベル "${String(d.level)}" です。有効な値は A 〜 M です。`,
+    );
+  }
+  const level = d.level;
+
+  // claimToken（UUID v4 形式チェック）
+  if (typeof d.claimToken !== "string" || !UUID_V4_REGEX.test(d.claimToken)) {
+    throw new HttpsError(
+      "invalid-argument",
+      '"claimToken" は UUID v4 形式の文字列で指定してください。',
+    );
+  }
+  const claimToken = d.claimToken;
+
+  // username（5文字・英大文字）
+  if (typeof d.username !== "string" || !USERNAME_REGEX.test(d.username)) {
+    throw new HttpsError(
+      "invalid-argument",
+      '"username" は英大文字（A〜Z）5文字で指定してください。',
+    );
+  }
+  const username = d.username;
+
+  // --- Firestore Transaction でユーザー名を本登録 ---
+  try {
+    return await registerUsername(level, claimToken, username);
+  } catch (e) {
+    if (e instanceof RankingError) {
+      throw new HttpsError(e.code, e.message);
+    }
+    throw e;
+  }
 }
