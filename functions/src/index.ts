@@ -4,6 +4,7 @@ import {onRequest} from "firebase-functions/https";
 import {onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {handleGetQuiz} from "./handlers/quizHandlers.js";
+import {handleSubmitScore} from "./handlers/rankingHandlers.js";
 
 // Firebase Admin SDK の初期化
 admin.initializeApp();
@@ -42,5 +43,21 @@ export const getQuizFunction = onCall(
   {enforceAppCheck: !isEmulator},
   async (request) => {
     return handleGetQuiz(request.data);
+  }
+);
+
+/**
+ * onCall: submitScore
+ * クイズ終了後にスコアを検証し、ランクイン時に Firestore のランキングへ仮登録する。
+ * サーバー側で答え合わせを行い、クライアントの自己申告スコアは使用しない（チート対策）。
+ * ランクイン時は後続の registerUsernameFunction で使用する claimToken を返す。
+ *
+ * リクエスト形式: { level: string, answers: string[], startedAt: number }
+ * レスポンス形式: { ranked, rank, correct_count, elapsed_time, claimToken }
+ */
+export const submitScoreFunction = onCall(
+  {enforceAppCheck: !isEmulator},
+  async (request) => {
+    return handleSubmitScore(request.data);
   }
 );
