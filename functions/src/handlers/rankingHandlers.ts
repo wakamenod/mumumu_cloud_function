@@ -43,7 +43,7 @@ const USERNAME_REGEX = /^[A-Z]{5}$/;
  * スコア仮登録ハンドラー。
  *
  * 1. 入力バリデーション
- * 2. Storage から問題データを取得しサーバー側で答え合わせ → correct_count を算出
+ * 2. Storage から問題データを取得し、問題 ID をキーにしたマップでサーバー側答え合わせ → correct_count を算出
  * 3. elapsed_time を算出し異常タイムを検出
  * 4. Firestore Transaction でランキングに仮登録
  * 5. ランクイン時は claimToken を返す
@@ -77,14 +77,20 @@ export async function handleSubmitScore(
   if (
     !Array.isArray(d.answers) ||
     d.answers.length !== QUESTION_COUNT ||
-    !d.answers.every((a) => typeof a === "string")
+    !d.answers.every(
+      (a) =>
+        a !== null &&
+        typeof a === "object" &&
+        typeof (a as Record<string, unknown>).id === "string" &&
+        typeof (a as Record<string, unknown>).answer === "string",
+    )
   ) {
     throw new HttpsError(
       "invalid-argument",
-      `"answers" は文字列を ${QUESTION_COUNT} 件含む配列で指定してください。`,
+      `"answers" は { id: string; answer: string } を ${QUESTION_COUNT} 件含む配列で指定してください。`,
     );
   }
-  const answers = d.answers as string[];
+  const answers = d.answers as {id: string; answer: string}[];
 
   // startedAt
   if (typeof d.startedAt !== "number" || !Number.isFinite(d.startedAt)) {
@@ -116,9 +122,11 @@ export async function handleSubmitScore(
     );
   });
 
+  const questionMap = new Map(questions.map((q) => [q.id, q]));
+
   let correctCount = 0;
-  for (let i = 0; i < QUESTION_COUNT; i++) {
-    if (answers[i] === questions[i]?.answer) {
+  for (const {id, answer} of answers) {
+    if (questionMap.get(id)?.answer === answer) {
       correctCount++;
     }
   }
