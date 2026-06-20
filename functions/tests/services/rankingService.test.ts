@@ -39,7 +39,12 @@ jest.mock("firebase-admin/firestore", () => {
 // ヘルパー
 // ---------------------------------------------------------------------------
 
-/** Transaction コールバックを即時実行するモックを設定する */
+/**
+ * Transaction コールバックを即時実行するモックを設定する
+ * @param {boolean} exists - ドキュメントが存在するかどうか
+ * @param {unknown[]} existingScores - 既存のスコア配列
+ * @return {void}
+ */
 function setupTransaction(
   exists: boolean,
   existingScores: unknown[] = [],
@@ -61,7 +66,13 @@ function setupTransaction(
   );
 }
 
-/** ランキングエントリのファクトリ */
+/**
+ * ランキングエントリのファクトリ
+ * @param {number} correctCount - 正解数
+ * @param {number} elapsedTime - 経過時間（秒）
+ * @param {number} createdAtMs - 作成日時（ミリ秒）
+ * @return {object} ランキングエントリオブジェクト
+ */
 function makeEntry(
   correctCount: number,
   elapsedTime: number,
@@ -271,7 +282,12 @@ const VALID_TOKEN = "550e8400-e29b-41d4-a716-446655440000";
 const RECENT_MS = Date.now() - 60_000; // 1 分前（TTL 内）
 const EXPIRED_MS = Date.now() - 11 * 60 * 1000; // 11 分前（TTL 超過）
 
-/** claim_token 付きエントリのファクトリ */
+/**
+ * claim_token 付きエントリのファクトリ
+ * @param {string | null} claimToken - クレームトークン
+ * @param {number} createdAtMs - 作成日時（ミリ秒）
+ * @return {object} クレームトークン付きランキングエントリオブジェクト
+ */
 function makeEntryWithToken(
   claimToken: string | null,
   createdAtMs = RECENT_MS,
@@ -304,6 +320,7 @@ describe("registerUsername", () => {
   });
 
   test("複数エントリ中の正しいエントリだけ更新される", async () => {
+    // eslint-disable-next-line max-len
     const OTHER_TOKEN = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"; // gitleaks:allow
     setupTransaction(true, [
       makeEntryWithToken(OTHER_TOKEN),
@@ -423,9 +440,15 @@ describe("getRanking", () => {
     const result = await getRanking("A");
 
     expect(result.rankings).toHaveLength(3);
-    expect(result.rankings[0]).toMatchObject({rank: 1, correct_count: 20, elapsed_time: 30.1});
-    expect(result.rankings[1]).toMatchObject({rank: 2, correct_count: 20, elapsed_time: 35.2});
-    expect(result.rankings[2]).toMatchObject({rank: 3, correct_count: 18, elapsed_time: 52.4});
+    expect(result.rankings[0]).toMatchObject(
+      {rank: 1, correct_count: 20, elapsed_time: 30.1},
+    );
+    expect(result.rankings[1]).toMatchObject(
+      {rank: 2, correct_count: 20, elapsed_time: 35.2},
+    );
+    expect(result.rankings[2]).toMatchObject(
+      {rank: 3, correct_count: 18, elapsed_time: 52.4},
+    );
   });
 
   test("ドキュメントが存在しない場合、空配列を返す", async () => {

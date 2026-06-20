@@ -30,7 +30,7 @@ lint:
     npm --prefix functions run lint
 
 # Lint + Build（デプロイ前と同じ検証）
-check: lint build
+check: lint test
 
 # ───────────────────────────────────────────────
 # テスト
@@ -55,7 +55,7 @@ test-coverage:
 # Functions + Storage エミュレーターを起動（ビルド込み）
 # 起動後、別ターミナルで `just seed` を実行して問題 JSON を投入する
 emulate:
-    npm --prefix functions run build && firebase emulators:start --only functions,storage
+    npm --prefix functions run build && firebase emulators:start --only functions,storage,firestore
 
 # シードデータをエミュレーターにアップロード（emulate 起動後に別ターミナルで実行）
 seed:

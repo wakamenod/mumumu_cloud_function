@@ -7,6 +7,6 @@
   ;;   C-c p P  → projectile-test-project     → just test
   ;;   C-c p u  → projectile-run-project      → just open (Xcode を開く)
   (projectile-project-compilation-dir . ".")
-  (projectile-project-compilation-cmd . "just build")
+  (projectile-project-compilation-cmd . "just check")
   (projectile-project-test-cmd        . "just test")
   (projectile-project-run-cmd         . "just run")))

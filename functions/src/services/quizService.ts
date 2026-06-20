@@ -7,7 +7,7 @@ import {getStorage} from "firebase-admin/storage";
 
 /** Firebase Storage に保存された問題 JSON の 1 要素 */
 export interface RawQuestion {
-  id: string;
+  id: number;
   question: string;
   answer: string;
 }
@@ -15,7 +15,7 @@ export interface RawQuestion {
 /** Cloud Function がクライアントに返す 1 問分のデータ */
 export interface QuizQuestion {
   order: number;
-  id: string;
+  id: number;
   question: string;
   answer_hash: string;
 }

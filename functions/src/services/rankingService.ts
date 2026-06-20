@@ -49,6 +49,10 @@ export interface GetRankingResult {
  * ハンドラー側で HttpsError に変換する。
  */
 export class RankingError extends Error {
+  /**
+   * @param {"not-found" | "deadline-exceeded"} code - エラーコード
+   * @param {string} message - エラーメッセージ
+   */
   constructor(
     public readonly code: "not-found" | "deadline-exceeded",
     message: string,
@@ -79,6 +83,11 @@ const CLAIM_TOKEN_TTL_MS = 10 * 60 * 1000; // 10分
  * 2 つのエントリを比較する。
  * ソート基準: correct_count 降順 → elapsed_time 昇順 → created_at 昇順（先着優先）
  */
+/**
+ * @param {RankingEntry} a - 比較対象エントリ A
+ * @param {RankingEntry} b - 比較対象エントリ B
+ * @return {number} ソート順を示す数値
+ */
 function compareEntries(a: RankingEntry, b: RankingEntry): number {
   if (b.correct_count !== a.correct_count) {
     return b.correct_count - a.correct_count;
@@ -93,6 +102,11 @@ function compareEntries(a: RankingEntry, b: RankingEntry): number {
  * 新スコアが現在の 20 位（最下位エントリ）より上位かどうかを判定する。
  * scores が 20 件未満の場合は常に true を返す。
  */
+/**
+ * @param {RankingEntry[]} scores - 現在のスコア配列
+ * @param {RankingEntry} newEntry - 新規エントリ
+ * @return {boolean} ランクインするかどうか
+ */
 function shouldRankIn(
   scores: RankingEntry[],
   newEntry: RankingEntry,
@@ -105,6 +119,10 @@ function shouldRankIn(
 /**
  * RankingEntry の配列を RankingDisplayEntry の配列に変換する。
  * claim_token を除外し、1 始まりの rank を付与する。
+ */
+/**
+ * @param {RankingEntry[]} scores - 変換対象のスコア配列
+ * @return {RankingDisplayEntry[]} 表示用エントリ配列
  */
 function toDisplayEntries(scores: RankingEntry[]): RankingDisplayEntry[] {
   return scores.map((entry, index) => ({
@@ -159,9 +177,9 @@ export async function registerUsername(
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(docRef);
 
-    const scores: RankingEntry[] = snapshot.exists
-      ? (snapshot.data()?.scores ?? [])
-      : [];
+    const scores: RankingEntry[] = snapshot.exists ?
+      (snapshot.data()?.scores ?? []) :
+      [];
 
     // claimToken が一致するエントリを検索
     const entryIndex = scores.findIndex(
@@ -188,9 +206,9 @@ export async function registerUsername(
 
     // username を上書き・claim_token を null にして単一利用を保証
     const updated = scores.map((e, i) =>
-      i === entryIndex
-        ? {...e, username, claim_token: null}
-        : e,
+      i === entryIndex ?
+        {...e, username, claim_token: null} :
+        e,
     );
 
     transaction.update(docRef, {scores: updated});
@@ -217,13 +235,21 @@ export async function getRanking(level: string): Promise<GetRankingResult> {
   const docRef = db.collection("rankings").doc(`level_${level}`);
   const snapshot = await docRef.get();
 
-  const scores: RankingEntry[] = snapshot.exists
-    ? (snapshot.data()?.scores ?? [])
-    : [];
+  const scores: RankingEntry[] = snapshot.exists ?
+    (snapshot.data()?.scores ?? []) :
+    [];
 
   return {rankings: toDisplayEntries(scores)};
 }
 
+/**
+ * スコアを Firestore のランキングに仮登録する。
+ *
+ * @param {string} level - レベル識別子（A〜M）
+ * @param {number} correctCount - サーバー側で算出した正解数
+ * @param {number} elapsedTime - サーバー側で算出した経過時間（秒）
+ * @return {Promise<SubmitScoreResult>} ランクイン結果・claimToken・最新ランキング
+ */
 export async function submitScore(
   level: string,
   correctCount: number,
@@ -245,9 +271,9 @@ export async function submitScore(
     const snapshot = await transaction.get(docRef);
 
     // 既存スコア配列を取得（ドキュメントが存在しない場合は空配列）
-    const existing: RankingEntry[] = snapshot.exists
-      ? (snapshot.data()?.scores ?? [])
-      : [];
+    const existing: RankingEntry[] = snapshot.exists ?
+      (snapshot.data()?.scores ?? []) :
+      [];
 
     const now = Timestamp.now();
     const claimToken = randomUUID();

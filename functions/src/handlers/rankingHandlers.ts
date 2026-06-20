@@ -81,22 +81,23 @@ export async function handleSubmitScore(
       (a) =>
         a !== null &&
         typeof a === "object" &&
-        typeof (a as Record<string, unknown>).id === "string" &&
+        typeof (a as Record<string, unknown>).id === "number" &&
         typeof (a as Record<string, unknown>).answer === "string",
     )
   ) {
     throw new HttpsError(
       "invalid-argument",
-      `"answers" は { id: string; answer: string } を ${QUESTION_COUNT} 件含む配列で指定してください。`,
+      "\"answers\" は { id: number; answer: string } を " +
+      `${QUESTION_COUNT} 件含む配列で指定してください。`,
     );
   }
-  const answers = d.answers as {id: string; answer: string}[];
+  const answers = d.answers as {id: number; answer: string}[];
 
   // startedAt
   if (typeof d.startedAt !== "number" || !Number.isFinite(d.startedAt)) {
     throw new HttpsError(
       "invalid-argument",
-      '"startedAt" は有限な数値（Unix タイムスタンプ ミリ秒）で指定してください。',
+      "\"startedAt\" は有限な数値（Unix タイムスタンプ ミリ秒）で指定してください。",
     );
   }
   const startedAt = d.startedAt;
@@ -171,7 +172,7 @@ export async function handleRegisterUsername(
   if (typeof d.claimToken !== "string" || !UUID_V4_REGEX.test(d.claimToken)) {
     throw new HttpsError(
       "invalid-argument",
-      '"claimToken" は UUID v4 形式の文字列で指定してください。',
+      "\"claimToken\" は UUID v4 形式の文字列で指定してください。",
     );
   }
   const claimToken = d.claimToken;
@@ -180,7 +181,7 @@ export async function handleRegisterUsername(
   if (typeof d.username !== "string" || !USERNAME_REGEX.test(d.username)) {
     throw new HttpsError(
       "invalid-argument",
-      '"username" は英大文字（A〜Z）5文字で指定してください。',
+      "\"username\" は英大文字（A〜Z）5文字で指定してください。",
     );
   }
   const username = d.username;

@@ -4,7 +4,11 @@ import {onRequest} from "firebase-functions/https";
 import {onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {handleGetQuiz} from "./handlers/quizHandlers.js";
-import {handleSubmitScore, handleRegisterUsername, handleGetRanking} from "./handlers/rankingHandlers.js";
+import {
+  handleSubmitScore,
+  handleRegisterUsername,
+  handleGetRanking,
+} from "./handlers/rankingHandlers.js";
 
 // Firebase Admin SDK の初期化
 admin.initializeApp();

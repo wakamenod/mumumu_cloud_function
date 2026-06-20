@@ -116,7 +116,7 @@ const result = await getQuiz({ levels: ["A", "C"] });
 | フィールド    | 型       | 説明                                                    |
 |---------------+----------+---------------------------------------------------------|
 | =order=       | =number= | 問題の出題順（1 始まりの連番）                          |
-| =id=          | =string= | Storage JSON に定義された問題の固有 ID（そのまま転送）  |
+| =id=          | =number= | Storage JSON に定義された問題の固有 ID（そのまま転送）  |
 | =question=    | =string= | 問題文（そのまま表示する）                              |
 | =answer_hash= | =string= | 正解を SHA-256 でハッシュ化した hex 文字列（64 文字）   |
 
@@ -189,7 +189,7 @@ const result = await getQuiz({ levels: ["A", "C"] });
 
 | フィールド | 型       | 説明                                              |
 |------------+----------+---------------------------------------------------|
-| =id=       | =string= | 問題の固有 ID。レベル内でユニークにする            |
+| =id=       | =number= | 問題の固有 ID。レベル内でユニークにする            |
 | =question= | =string= | 問題文                                            |
 | =answer=   | =string= | *生の正解テキスト*。Function 側でハッシュ化される |
 
@@ -318,8 +318,8 @@ const submitScore = httpsCallable(functions, "submitScoreFunction");
 const result = await submitScore({
   level:     "A",
   answers:   [
-    { id: "a001", answer: "8"   },  // 問題 ID とユーザーが入力した生の解答のペア
-    { id: "b014", answer: "5/6" },
+    { id: 1, answer: "8"   },  // 問題 ID とユーザーが入力した生の解答のペア
+    { id: 14, answer: "5/6" },
     // ... 計 20 件
   ],
   startedAt: 1718268420000,         // クイズ開始時の Unix タイムスタンプ（ミリ秒）
@@ -331,7 +331,7 @@ const result = await submitScore({
 | フィールド  | 型                                      | 必須 | 説明                                                                             |
 |-------------+-----------------------------------------+------+----------------------------------------------------------------------------------|
 | =level=     | =string=                                | ○    | クイズのレベル識別子（A〜M）                                                     |
-| =answers=   | ={ id: string; answer: string }[]=      | ○    | 問題 ID とユーザーが入力した生の解答のペアのリスト（20件）。順番は問わない       |
+| =answers=   | ={ id: number; answer: string }[]=      | ○    | 問題 ID とユーザーが入力した生の解答のペアのリスト（20件）。順番は問わない       |
 | =startedAt= | =number=                                | ○    | クイズ開始時の Unix タイムスタンプ（ミリ秒）                                     |
 
 ** 7.3 レスポンス

@@ -31,7 +31,7 @@ import {handleGetQuiz} from "../../src/handlers/quizHandlers";
  */
 function makeQuestions(n: number, prefix = "Q") {
   return Array.from({length: n}, (_, i) => ({
-    id: `${prefix.toLowerCase()}${String(i + 1).padStart(3, "0")}`,
+    id: i + 1,
     question: `${prefix}${i + 1} = ?`,
     answer: String(i + 1),
   }));
@@ -103,8 +103,8 @@ describe("handleGetQuiz — 正常系", () => {
 
     for (const q of questions) {
       expect(q).toHaveProperty("id");
-      expect(typeof q.id).toBe("string");
-      expect(q.id.length).toBeGreaterThan(0);
+      expect(typeof q.id).toBe("number");
+      expect(q.id).toBeGreaterThan(0);
     }
   });
 

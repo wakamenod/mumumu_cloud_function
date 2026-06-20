@@ -19,6 +19,10 @@ jest.mock("../../src/services/rankingService.js", () => ({
   registerUsername: jest.fn(),
   getRanking: jest.fn(),
   RankingError: class RankingError extends Error {
+    /**
+     * @param {string} code - エラーコード
+     * @param {string} message - エラーメッセージ
+     */
     constructor(
       public readonly code: string,
       message: string,
@@ -29,15 +33,18 @@ jest.mock("../../src/services/rankingService.js", () => ({
   },
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const {fetchQuizData: mockFetchQuizData} = require("../../src/services/quizService.js");
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+/* eslint-disable @typescript-eslint/no-require-imports */
+/* eslint-disable @typescript-eslint/no-var-requires */
+const {fetchQuizData: mockFetchQuizData} =
+  require("../../src/services/quizService.js");
 const {
   submitScore: mockSubmitScore,
   registerUsername: mockRegisterUsername,
   getRanking: mockGetRanking,
   RankingError: MockRankingError,
 } = require("../../src/services/rankingService.js");
+/* eslint-enable @typescript-eslint/no-require-imports */
+/* eslint-enable @typescript-eslint/no-var-requires */
 
 // ---------------------------------------------------------------------------
 // テスト用定数
@@ -48,13 +55,16 @@ const VALID_LEVEL = "A";
 
 /** 20 問分のダミー問題データ（answer は "correct_N" 形式） */
 const dummyQuestions = Array.from({length: QUESTION_COUNT}, (_, i) => ({
-  id: `q${i + 1}`,
+  id: i + 1,
   question: `問題 ${i + 1}`,
   answer: `correct_${i}`,
 }));
 
-/** 全問正解の解答リスト */
-const allCorrectAnswers = dummyQuestions.map((q) => q.answer);
+/** 全問正解の解答リスト（{ id: number; answer: string }[] 形式） */
+const allCorrectAnswers = dummyQuestions.map((q) => ({
+  id: q.id,
+  answer: q.answer,
+}));
 
 /** startedAt: 60 秒前（正常な経過時間）*/
 const validStartedAt = Date.now() - 60_000;
@@ -91,7 +101,9 @@ describe("handleSubmitScore", () => {
     expect(result.ranked).toBe(true);
     expect(result.rank).toBe(1);
     expect(result.claimToken).toBe("550e8400-e29b-41d4-a716-446655440000");
-    expect(mockSubmitScore).toHaveBeenCalledWith(VALID_LEVEL, 20, expect.any(Number));
+    expect(mockSubmitScore).toHaveBeenCalledWith(
+      VALID_LEVEL, 20, expect.any(Number),
+    );
   });
 
   test("全問不正解でも handleSubmitScore 自体はエラーにならない", async () => {
@@ -105,17 +117,21 @@ describe("handleSubmitScore", () => {
 
     const result = await handleSubmitScore({
       level: VALID_LEVEL,
-      answers: Array(QUESTION_COUNT).fill("wrong_answer"),
+      answers: Array.from({length: QUESTION_COUNT}, (_, i) => ({
+        id: i + 1, answer: "wrong_answer",
+      })),
       startedAt: validStartedAt,
     });
 
     expect(result.ranked).toBe(false);
-    expect(mockSubmitScore).toHaveBeenCalledWith(VALID_LEVEL, 0, expect.any(Number));
+    expect(mockSubmitScore).toHaveBeenCalledWith(
+      VALID_LEVEL, 0, expect.any(Number),
+    );
   });
 
   test("部分正解のとき correct_count が正しく計算される", async () => {
     const partialAnswers = allCorrectAnswers.map((a, i) =>
-      i % 2 === 0 ? a : "wrong",
+      i % 2 === 0 ? a : {id: a.id, answer: "wrong"},
     ); // 偶数インデックスのみ正解 → 10 問正解
 
     await handleSubmitScore({
@@ -124,26 +140,34 @@ describe("handleSubmitScore", () => {
       startedAt: validStartedAt,
     });
 
-    expect(mockSubmitScore).toHaveBeenCalledWith(VALID_LEVEL, 10, expect.any(Number));
+    expect(mockSubmitScore).toHaveBeenCalledWith(
+      VALID_LEVEL, 10, expect.any(Number),
+    );
   });
 
   // --- invalid-argument: level ---
 
   test("level が未指定のとき invalid-argument を投げる", async () => {
     await expect(
-      handleSubmitScore({answers: allCorrectAnswers, startedAt: validStartedAt}),
+      handleSubmitScore({
+        answers: allCorrectAnswers, startedAt: validStartedAt,
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
   test("level が無効な文字列のとき invalid-argument を投げる", async () => {
     await expect(
-      handleSubmitScore({level: "Z", answers: allCorrectAnswers, startedAt: validStartedAt}),
+      handleSubmitScore({
+        level: "Z", answers: allCorrectAnswers, startedAt: validStartedAt,
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
   test("level が小文字のとき invalid-argument を投げる", async () => {
     await expect(
-      handleSubmitScore({level: "a", answers: allCorrectAnswers, startedAt: validStartedAt}),
+      handleSubmitScore({
+        level: "a", answers: allCorrectAnswers, startedAt: validStartedAt,
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
@@ -151,22 +175,32 @@ describe("handleSubmitScore", () => {
 
   test("answers が配列でないとき invalid-argument を投げる", async () => {
     await expect(
-      handleSubmitScore({level: VALID_LEVEL, answers: "not-an-array", startedAt: validStartedAt}),
+      handleSubmitScore({
+        level: VALID_LEVEL,
+        answers: "not-an-array",
+        startedAt: validStartedAt,
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
   test("answers が 20 件未満のとき invalid-argument を投げる", async () => {
     await expect(
-      handleSubmitScore({level: VALID_LEVEL, answers: ["a"], startedAt: validStartedAt}),
+      handleSubmitScore({
+        level: VALID_LEVEL, answers: ["a"], startedAt: validStartedAt,
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
-  test("answers に文字列以外が含まれるとき invalid-argument を投げる", async () => {
-    const badAnswers = [...allCorrectAnswers];
-    badAnswers[0] = 123 as unknown as string;
+  test("answers に不正な要素が含まれるとき invalid-argument を投げる", async () => {
+    const badAnswers = [
+      ...allCorrectAnswers.slice(1),
+      {id: "not-a-number", answer: "wrong"} as unknown,
+    ];
 
     await expect(
-      handleSubmitScore({level: VALID_LEVEL, answers: badAnswers, startedAt: validStartedAt}),
+      handleSubmitScore({
+        level: VALID_LEVEL, answers: badAnswers, startedAt: validStartedAt,
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
@@ -174,13 +208,21 @@ describe("handleSubmitScore", () => {
 
   test("startedAt が文字列のとき invalid-argument を投げる", async () => {
     await expect(
-      handleSubmitScore({level: VALID_LEVEL, answers: allCorrectAnswers, startedAt: "not-a-number"}),
+      handleSubmitScore({
+        level: VALID_LEVEL,
+        answers: allCorrectAnswers,
+        startedAt: "not-a-number",
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
   test("startedAt が Infinity のとき invalid-argument を投げる", async () => {
     await expect(
-      handleSubmitScore({level: VALID_LEVEL, answers: allCorrectAnswers, startedAt: Infinity}),
+      handleSubmitScore({
+        level: VALID_LEVEL,
+        answers: allCorrectAnswers,
+        startedAt: Infinity,
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
@@ -267,13 +309,17 @@ describe("handleRegisterUsername", () => {
 
   test("level が未指定のとき invalid-argument を投げる", async () => {
     await expect(
-      handleRegisterUsername({claimToken: VALID_TOKEN, username: VALID_USERNAME}),
+      handleRegisterUsername({
+        claimToken: VALID_TOKEN, username: VALID_USERNAME,
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
   test("level が無効のとき invalid-argument を投げる", async () => {
     await expect(
-      handleRegisterUsername({level: "Z", claimToken: VALID_TOKEN, username: VALID_USERNAME}),
+      handleRegisterUsername({
+        level: "Z", claimToken: VALID_TOKEN, username: VALID_USERNAME,
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
@@ -287,7 +333,11 @@ describe("handleRegisterUsername", () => {
 
   test("claimToken が UUID v4 形式でないとき invalid-argument を投げる", async () => {
     await expect(
-      handleRegisterUsername({level: VALID_LEVEL, claimToken: "not-a-uuid", username: VALID_USERNAME}),
+      handleRegisterUsername({
+        level: VALID_LEVEL,
+        claimToken: "not-a-uuid",
+        username: VALID_USERNAME,
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
@@ -295,7 +345,8 @@ describe("handleRegisterUsername", () => {
     await expect(
       handleRegisterUsername({
         level: VALID_LEVEL,
-        claimToken: "6ba7b810-9dad-11d1-80b4-00c04fd430c8", // v1 // gitleaks:allow
+        // eslint-disable-next-line max-len
+        claimToken: "6ba7b810-9dad-11d1-80b4-00c04fd430c8", // v1 UUID // gitleaks:allow
         username: VALID_USERNAME,
       }),
     ).rejects.toMatchObject({code: "invalid-argument"});
@@ -305,55 +356,81 @@ describe("handleRegisterUsername", () => {
 
   test("username が 5 文字未満のとき invalid-argument を投げる", async () => {
     await expect(
-      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: "HI"}),
+      handleRegisterUsername({
+        level: VALID_LEVEL, claimToken: VALID_TOKEN, username: "HI",
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
   test("username が 6 文字以上のとき invalid-argument を投げる", async () => {
     await expect(
-      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: "TOOLONG"}),
+      handleRegisterUsername({
+        level: VALID_LEVEL, claimToken: VALID_TOKEN, username: "TOOLONG",
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
   test("username に小文字が含まれるとき invalid-argument を投げる", async () => {
     await expect(
-      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: "Hello"}),
+      handleRegisterUsername({
+        level: VALID_LEVEL, claimToken: VALID_TOKEN, username: "Hello",
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
   test("username に記号が含まれるとき invalid-argument を投げる", async () => {
     await expect(
-      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: "HE!LO"}),
+      handleRegisterUsername({
+        level: VALID_LEVEL, claimToken: VALID_TOKEN, username: "HE!LO",
+      }),
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
   // --- RankingError の伝播 ---
 
-  test("registerUsername が not-found を投げたとき HttpsError(not-found) に変換される", async () => {
-    mockRegisterUsername.mockRejectedValue(
-      new MockRankingError("not-found", "Token not found"),
-    );
+  test(
+    "registerUsername が not-found を投げたとき" +
+    " HttpsError(not-found) に変換される",
+    async () => {
+      mockRegisterUsername.mockRejectedValue(
+        new MockRankingError("not-found", "Token not found"),
+      );
 
-    await expect(
-      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: VALID_USERNAME}),
-    ).rejects.toMatchObject({code: "not-found"});
-  });
+      await expect(
+        handleRegisterUsername({
+          level: VALID_LEVEL,
+          claimToken: VALID_TOKEN,
+          username: VALID_USERNAME,
+        }),
+      ).rejects.toMatchObject({code: "not-found"});
+    },
+  );
 
-  test("registerUsername が deadline-exceeded を投げたとき HttpsError(deadline-exceeded) に変換される", async () => {
-    mockRegisterUsername.mockRejectedValue(
-      new MockRankingError("deadline-exceeded", "TTL exceeded"),
-    );
+  test(
+    "registerUsername が deadline-exceeded を投げたとき" +
+    " HttpsError(deadline-exceeded) に変換される",
+    async () => {
+      mockRegisterUsername.mockRejectedValue(
+        new MockRankingError("deadline-exceeded", "TTL exceeded"),
+      );
 
-    await expect(
-      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: VALID_USERNAME}),
-    ).rejects.toMatchObject({code: "deadline-exceeded"});
-  });
+      await expect(
+        handleRegisterUsername({
+          level: VALID_LEVEL,
+          claimToken: VALID_TOKEN,
+          username: VALID_USERNAME,
+        }),
+      ).rejects.toMatchObject({code: "deadline-exceeded"});
+    },
+  );
 
   test("予期しない Error はそのまま再スローされる", async () => {
     mockRegisterUsername.mockRejectedValue(new Error("Unexpected"));
 
     await expect(
-      handleRegisterUsername({level: VALID_LEVEL, claimToken: VALID_TOKEN, username: VALID_USERNAME}),
+      handleRegisterUsername({
+        level: VALID_LEVEL, claimToken: VALID_TOKEN, username: VALID_USERNAME,
+      }),
     ).rejects.toThrow("Unexpected");
   });
 });
