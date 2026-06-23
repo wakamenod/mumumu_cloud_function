@@ -20,6 +20,9 @@ serviceAccountKey.json
 *service-account*.json
 *credentials*.json
 
+# エミュレータ用シードデータ（問題文を含むため非公開）
+emulator-seed/
+
 # エディタ
 .vscode/
 .idea/
