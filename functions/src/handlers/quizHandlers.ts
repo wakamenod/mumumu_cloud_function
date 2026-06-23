@@ -10,7 +10,7 @@ import {
 // ---------------------------------------------------------------------------
 
 /** 出題数 */
-const QUESTION_COUNT = 20;
+const QUESTION_COUNT = 7;
 
 /** 有効なレベル識別子 */
 const VALID_LEVELS = new Set([
@@ -48,7 +48,7 @@ function shuffleArray<T>(array: T[]): T[] {
  * 認証不要（ユーザー登録なし）。
  *
  * @param {unknown} data - クライアントから受け取った入力データ
- * @return {{ questions: QuizQuestion[] }} 20 問分のクイズデータ
+ * @return {{ questions: QuizQuestion[] }} 7 問分のクイズデータ
  */
 export async function handleGetQuiz(
   data: unknown,

@@ -50,10 +50,10 @@ const {
 // テスト用定数
 // ---------------------------------------------------------------------------
 
-const QUESTION_COUNT = 20;
+const QUESTION_COUNT = 7;
 const VALID_LEVEL = "A";
 
-/** 20 問分のダミー問題データ（answer は "correct_N" 形式） */
+/** 7 問分のダミー問題データ（answer は "correct_N" 形式） */
 const dummyQuestions = Array.from({length: QUESTION_COUNT}, (_, i) => ({
   id: i + 1,
   question: `問題 ${i + 1}`,
@@ -73,7 +73,7 @@ const validStartedAt = Date.now() - 60_000;
 const rankedResult = {
   ranked: true,
   rank: 1,
-  correct_count: 20,
+  correct_count: 7,
   elapsed_time: 60.0,
   claimToken: "550e8400-e29b-41d4-a716-446655440000",
 };
@@ -91,7 +91,7 @@ describe("handleSubmitScore", () => {
 
   // --- 正常系 ---
 
-  test("全問正解でランクインした場合、correct_count: 20 と claimToken を返す", async () => {
+  test("全問正解でランクインした場合、correct_count: 7 と claimToken を返す", async () => {
     const result = await handleSubmitScore({
       level: VALID_LEVEL,
       answers: allCorrectAnswers,
@@ -102,7 +102,7 @@ describe("handleSubmitScore", () => {
     expect(result.rank).toBe(1);
     expect(result.claimToken).toBe("550e8400-e29b-41d4-a716-446655440000");
     expect(mockSubmitScore).toHaveBeenCalledWith(
-      VALID_LEVEL, 20, expect.any(Number),
+      VALID_LEVEL, 7, expect.any(Number),
     );
   });
 
@@ -132,7 +132,7 @@ describe("handleSubmitScore", () => {
   test("部分正解のとき correct_count が正しく計算される", async () => {
     const partialAnswers = allCorrectAnswers.map((a, i) =>
       i % 2 === 0 ? a : {id: a.id, answer: "wrong"},
-    ); // 偶数インデックスのみ正解 → 10 問正解
+    ); // 偶数インデックスのみ正解 → 4 問正解
 
     await handleSubmitScore({
       level: VALID_LEVEL,
@@ -141,7 +141,7 @@ describe("handleSubmitScore", () => {
     });
 
     expect(mockSubmitScore).toHaveBeenCalledWith(
-      VALID_LEVEL, 10, expect.any(Number),
+      VALID_LEVEL, 4, expect.any(Number),
     );
   });
 
@@ -183,7 +183,7 @@ describe("handleSubmitScore", () => {
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
-  test("answers が 20 件未満のとき invalid-argument を投げる", async () => {
+  test("answers が 7 件未満のとき invalid-argument を投げる", async () => {
     await expect(
       handleSubmitScore({
         level: VALID_LEVEL, answers: ["a"], startedAt: validStartedAt,
@@ -242,7 +242,7 @@ describe("handleSubmitScore", () => {
   });
 
   test("elapsed_time が閾値(10秒)未満のとき deadline-exceeded を投げる", async () => {
-    // startedAt を 1 秒前に設定（20問 × 0.5秒 = 10秒が閾値）
+    // startedAt を 1 秒前に設定（7問 × 0.5秒 = 3.5秒が閾値）
     const tooRecentStartedAt = Date.now() - 1_000;
 
     await expect(
@@ -441,8 +441,8 @@ describe("handleRegisterUsername", () => {
 
 /** ランキング表示用エントリのサンプル */
 const sampleRankings = [
-  {rank: 1, username: "BBBBB", correct_count: 20, elapsed_time: 30.1},
-  {rank: 2, username: "CCCCC", correct_count: 20, elapsed_time: 35.2},
+  {rank: 1, username: "BBBBB", correct_count: 7, elapsed_time: 30.1},
+  {rank: 2, username: "CCCCC", correct_count: 7, elapsed_time: 35.2},
   {rank: 3, username: "DDDDD", correct_count: 18, elapsed_time: 52.4},
 ];
 

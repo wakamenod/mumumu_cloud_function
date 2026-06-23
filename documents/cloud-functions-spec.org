@@ -56,7 +56,7 @@ index.ts（Function の登録・エクスポート）
 | Function 名               | 種別        | App Check | 概要                                           |
 |---------------------------+-------------+-----------+------------------------------------------------|
 | =helloWorld=              | HTTP        | なし      | ヘルスチェック用（機密データなし）             |
-| =getQuizFunction=         | onCall (v2) | 強制      | レベル指定で 20 問のクイズデータを返す         |
+| =getQuizFunction=         | onCall (v2) | 強制      | レベル指定で 7 問のクイズデータを返す          |
 | =submitScoreFunction=     | onCall (v2) | 強制      | スコアを検証しランキングに仮登録する           |
 | =registerUsernameFunction= | onCall (v2) | 強制      | claimToken を検証しユーザー名を本登録する      |
 | =getRankingFunction=      | onCall (v2) | 強制      | レベル指定でランキング一覧（上位 20 件）を返す |
@@ -127,7 +127,7 @@ const result = await getQuiz({ levels: ["A", "C"] });
 | コード                | 発生条件                                                   |
 |-----------------------+------------------------------------------------------------|
 | =invalid-argument=    | =levels= が未指定・空配列・A〜L 以外の値・文字列以外を含む |
-| =failed-precondition= | 指定レベルの合計問題数が 20 問未満                         |
+| =failed-precondition= | 指定レベルの合計問題数が 7 問未満                          |
 
 ** 3.5 内部処理フロー
 
@@ -136,9 +136,9 @@ const result = await getQuiz({ levels: ["A", "C"] });
 2. 各レベルの JSON を Firebase Storage から並列取得（Promise.all）
    └── キャッシュヒット時は Storage へのアクセスをスキップ
 3. 全レベルの問題プールを結合（Array.flat）
-4. プールが 20 問未満なら failed-precondition エラー
+4. プールが 7 問未満なら failed-precondition エラー
 5. Fisher-Yates シャッフル
-6. 先頭 20 問を抽出
+6. 先頭 7 問を抽出
 7. { order, id, question, answer_hash } にマッピングして返却
    └── answer は SHA-256 ハッシュ化し、生の値はレスポンスに含めない
 #+END_EXAMPLE
@@ -209,7 +209,7 @@ const result = await getQuiz({ levels: ["A", "C"] });
 
 各ファイルに *30〜50 問以上* を推奨する。
 
-- 単一レベル指定時でも最低 20 問が必要（不足時は =failed-precondition= エラー）
+- 単一レベル指定時でも最低 7 問が必要（不足時は =failed-precondition= エラー）
 - 問題数が多いほどシャッフルの多様性が上がり、毎回異なる問題セットが出題される
 
 -----
@@ -484,7 +484,7 @@ const result = await registerUsername({
 | =not-found=         | =claimToken= に一致するエントリが存在しない（無効・既使用・期限切れ）    |
 | =deadline-exceeded= | =claimToken= の TTL（10分）を超過している                                |
 
-** 8.5 内部処理フロー
+kaku** 8.5 内部処理フロー
 
 #+BEGIN_EXAMPLE
 1. 入力バリデーション（level / claimToken の形式 / username の型・値チェック）
@@ -587,8 +587,8 @@ const result = await getRanking({ level: "A" });
 ** 10.2 主なテストケース（getQuiz）
 
 *** 正常系
-- 単一レベルで 20 問を返す
-- 複数レベルの問題をマージして 20 問返す
+- 単一レベルで 7 問を返す
+- 複数レベルの問題をマージして 7 問返す
 - =order= が 1 始まりの連番になっている
 - =answer_hash= が SHA-256 の hex 文字列（64 文字）である
 - レスポンスに生の =answer= フィールドが含まれない
@@ -602,7 +602,7 @@ const result = await getRanking({ level: "A" });
 - 無効なレベル名（='Z'=）のとき =invalid-argument= を投げる
 - 小文字（='a'=）のとき =invalid-argument= を投げる
 - =levels= に文字列型でない要素を含む場合 =invalid-argument= を投げる
-- プール合計が 20 問未満のとき =failed-precondition= を投げる
+- プール合計が 7 問未満のとき =failed-precondition= を投げる
 
 ** 10.3 テスト実行コマンド
 

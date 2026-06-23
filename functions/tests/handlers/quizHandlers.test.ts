@@ -46,27 +46,27 @@ describe("handleGetQuiz — 正常系", () => {
     mockFetchQuizData.mockReset();
   });
 
-  it("単一レベルで 20 問を返す", async () => {
+  it("単一レベルで 7 問を返す", async () => {
     mockFetchQuizData.mockResolvedValue(makeQuestions(25, "A"));
 
     const result = await handleGetQuiz({levels: ["A"]});
 
-    expect(result.questions).toHaveLength(20);
+    expect(result.questions).toHaveLength(7);
   });
 
-  it("複数レベルの問題をマージして 20 問返す", async () => {
+  it("複数レベルの問題をマージして 7 問返す", async () => {
     mockFetchQuizData
       .mockResolvedValueOnce(makeQuestions(15, "A"))
       .mockResolvedValueOnce(makeQuestions(15, "B"));
 
     const result = await handleGetQuiz({levels: ["A", "B"]});
 
-    expect(result.questions).toHaveLength(20);
+    expect(result.questions).toHaveLength(7);
     expect(mockFetchQuizData).toHaveBeenCalledTimes(2);
   });
 
   it("order は 1 始まりの連番になっている", async () => {
-    mockFetchQuizData.mockResolvedValue(makeQuestions(20, "A"));
+    mockFetchQuizData.mockResolvedValue(makeQuestions(7, "A"));
 
     const {questions} = await handleGetQuiz({levels: ["A"]});
 
@@ -76,7 +76,7 @@ describe("handleGetQuiz — 正常系", () => {
   });
 
   it("answer_hash は SHA-256 の hex 文字列（64 文字）である", async () => {
-    mockFetchQuizData.mockResolvedValue(makeQuestions(20, "A"));
+    mockFetchQuizData.mockResolvedValue(makeQuestions(7, "A"));
 
     const {questions} = await handleGetQuiz({levels: ["A"]});
 
@@ -87,7 +87,7 @@ describe("handleGetQuiz — 正常系", () => {
   });
 
   it("レスポンスに生の answer フィールドが含まれない", async () => {
-    mockFetchQuizData.mockResolvedValue(makeQuestions(20, "A"));
+    mockFetchQuizData.mockResolvedValue(makeQuestions(7, "A"));
 
     const {questions} = await handleGetQuiz({levels: ["A"]});
 
@@ -97,7 +97,7 @@ describe("handleGetQuiz — 正常系", () => {
   });
 
   it("id が Storage の値そのままレスポンスに含まれる", async () => {
-    mockFetchQuizData.mockResolvedValue(makeQuestions(20, "A"));
+    mockFetchQuizData.mockResolvedValue(makeQuestions(7, "A"));
 
     const {questions} = await handleGetQuiz({levels: ["A"]});
 
@@ -124,22 +124,22 @@ describe("handleGetQuiz — 正常系", () => {
   });
 
   it("最大レベル M を指定しても正常に動作する", async () => {
-    mockFetchQuizData.mockResolvedValue(makeQuestions(20, "M"));
+    mockFetchQuizData.mockResolvedValue(makeQuestions(7, "M"));
 
     const result = await handleGetQuiz({levels: ["M"]});
 
-    expect(result.questions).toHaveLength(20);
+    expect(result.questions).toHaveLength(7);
   });
 
   it("全 13 レベル（A〜M）を同時指定しても正常に動作する", async () => {
-    mockFetchQuizData.mockResolvedValue(makeQuestions(20, "Q"));
+    mockFetchQuizData.mockResolvedValue(makeQuestions(7, "Q"));
 
     const allLevels = [
       "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
     ];
     const result = await handleGetQuiz({levels: allLevels});
 
-    expect(result.questions).toHaveLength(20);
+    expect(result.questions).toHaveLength(7);
     expect(mockFetchQuizData).toHaveBeenCalledTimes(13);
   });
 });
@@ -185,8 +185,8 @@ describe("handleGetQuiz — 異常系", () => {
     });
   });
 
-  it("プール合計が 20 問未満のとき failed-precondition を投げる", async () => {
-    mockFetchQuizData.mockResolvedValue(makeQuestions(10, "A"));
+  it("プール合計が 7 問未満のとき failed-precondition を投げる", async () => {
+    mockFetchQuizData.mockResolvedValue(makeQuestions(5, "A"));
 
     await expect(handleGetQuiz({levels: ["A"]})).rejects.toMatchObject({
       code: "failed-precondition",

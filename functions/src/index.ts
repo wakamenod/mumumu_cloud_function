@@ -30,7 +30,7 @@ export const helloWorld = onRequest((request, response) => {
 /**
  * onCall: getQuiz
  * 指定されたレベル（A〜L）の問題データを Firebase Storage から取得し、
- * シャッフルした 20 問を返す。
+ * シャッフルした 7 問を返す。
  *
  * enforceAppCheck: true により、有効な App Check トークンを持つ正規アプリ
  * からのリクエストのみを受け付ける。トークンが無効・欠落の場合は
