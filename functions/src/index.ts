@@ -9,6 +9,10 @@ import {
   handleRegisterUsername,
   handleGetRanking,
 } from "./handlers/rankingHandlers.js";
+import {
+  withEmulatorLogging,
+  withEmulatorRequestLogging,
+} from "./middleware/emulatorLogger.js";
 
 // Firebase Admin SDK の初期化
 admin.initializeApp();
@@ -19,13 +23,16 @@ setGlobalOptions({maxInstances: 10});
  * GET /helloWorld
  * ヘルスチェック用エンドポイント。サービスの稼働確認に使用する。
  */
-export const helloWorld = onRequest((request, response) => {
-  logger.info("helloWorld called", {structuredData: true});
-  response.json({
-    message: "Hello from Firebase!",
-    timestamp: new Date().toISOString(),
-  });
-});
+export const helloWorld = onRequest(withEmulatorRequestLogging(
+  "helloWorld",
+  (request, response) => {
+    logger.info("helloWorld called", {structuredData: true});
+    response.json({
+      message: "Hello from Firebase!",
+      timestamp: new Date().toISOString(),
+    });
+  },
+));
 
 /**
  * onCall: getQuiz
@@ -46,7 +53,10 @@ const isEmulator = process.env.FUNCTIONS_EMULATOR === "true";
 export const getQuizFunction = onCall(
   {enforceAppCheck: !isEmulator},
   async (request) => {
-    return handleGetQuiz(request.data);
+    const handle = withEmulatorLogging(
+      "getQuizFunction", handleGetQuiz,
+    );
+    return handle(request.data);
   }
 );
 
@@ -62,7 +72,10 @@ export const getQuizFunction = onCall(
 export const submitScoreFunction = onCall(
   {enforceAppCheck: !isEmulator},
   async (request) => {
-    return handleSubmitScore(request.data);
+    const handle = withEmulatorLogging(
+      "submitScoreFunction", handleSubmitScore,
+    );
+    return handle(request.data);
   }
 );
 
@@ -77,13 +90,20 @@ export const submitScoreFunction = onCall(
 export const registerUsernameFunction = onCall(
   {enforceAppCheck: !isEmulator},
   async (request) => {
-    return handleRegisterUsername(request.data);
+    const handle = withEmulatorLogging(
+      "registerUsernameFunction",
+      handleRegisterUsername,
+    );
+    return handle(request.data);
   }
 );
 
 export const getRankingFunction = onCall(
   {enforceAppCheck: !isEmulator},
   async (request) => {
-    return handleGetRanking(request.data);
+    const handle = withEmulatorLogging(
+      "getRankingFunction", handleGetRanking,
+    );
+    return handle(request.data);
   }
 );

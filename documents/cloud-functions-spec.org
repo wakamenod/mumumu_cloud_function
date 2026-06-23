@@ -26,6 +26,8 @@ functions/
 │   ├── index.ts                   # Function のエントリポイント・エクスポート
 │   ├── handlers/
 │   │   └── quizHandlers.ts        # クイズ取得のビジネスロジック
+│   ├── middleware/
+│   │   └── emulatorLogger.ts      # エミュレータ専用ロギングミドルウェア
 │   └── services/
 │       └── quizService.ts         # Storage アクセス・キャッシュ・ハッシュ化
 └── tests/
@@ -39,6 +41,7 @@ functions/
 
 #+BEGIN_EXAMPLE
 index.ts（Function の登録・エクスポート）
+    ├── middleware/（横断的関心事：ロギング等）
     └── handlers/（入力バリデーション・ビジネスロジック）
             └── services/（Storage / Firestore への I/O）
 #+END_EXAMPLE
@@ -417,6 +420,8 @@ functions/
 │   ├── handlers/
 │   │   ├── quizHandlers.ts
 │   │   └── rankingHandlers.ts          # submitScore / registerUsername のバリデーション・ビジネスロジック
+│   ├── middleware/
+│   │   └── emulatorLogger.ts           # エミュレータ専用ロギングミドルウェア
 │   └── services/
 │       ├── quizService.ts
 │       └── rankingService.ts           # Firestore Transaction・ランクイン判定・claimToken 管理
@@ -572,19 +577,91 @@ const result = await getRanking({ level: "A" });
 
 -----
 
-* 10. テスト仕様
+* 10. エミュレータ用ロギングミドルウェア
 
-** 10.1 テスト構成
+エミュレータ実行時のみ、全 Function のリクエスト/レスポンスを自動的にログ出力する。
+本番環境ではオーバーヘッドゼロ（元のハンドラーをそのまま返し、ラップ関数自体が生成されない）。
+
+** 10.1 対象ファイル
+
+=src/middleware/emulatorLogger.ts=
+
+** 10.2 エミュレータ判定
+
+環境変数 =FUNCTIONS_EMULATOR= が ="true"= のときのみ有効。
+この環境変数は Firebase エミュレーターが自動でセットするため、開発者の設定は不要。
+
+** 10.3 提供する関数
+
+| 関数名                         | 対象       | 説明                                          |
+|--------------------------------+------------+-----------------------------------------------|
+| =withEmulatorLogging=          | =onCall=   | ハンドラー関数をラップし、リクエスト/レスポンスをログ出力 |
+| =withEmulatorRequestLogging=   | =onRequest= | HTTP ハンドラーをラップし、リクエスト/レスポンスをログ出力 |
+
+** 10.4 ログ出力内容
+
+*** onCall（=withEmulatorLogging=）
+
+| タイミング | レベル  | アイコン | 内容                                              |
+|------------+---------+----------+---------------------------------------------------|
+| リクエスト | =info=  | ⚡       | 関数名、リクエストデータ                          |
+| 成功       | =info=  | ✅       | 関数名、レスポンスデータ、処理時間（ms）          |
+| エラー     | =error= | ❌       | 関数名、エラー詳細（name, message, stack）、処理時間（ms） |
+
+*** onRequest（=withEmulatorRequestLogging=）
+
+| タイミング | レベル           | アイコン | 内容                                              |
+|------------+------------------+----------+---------------------------------------------------|
+| リクエスト | =info=           | ⚡       | 関数名、HTTP メソッド、URL、query、body            |
+| 成功       | =info=           | ✅       | 関数名、ステータスコード、処理時間（ms）          |
+| エラー     | =error=          | ❌       | 関数名、ステータスコード（400以上）、処理時間（ms） |
+
+** 10.5 適用方法
+
+=index.ts= で各ハンドラーをラップして使用する。
+
+#+BEGIN_SRC typescript
+// onCall の場合
+export const getQuizFunction = onCall(
+  {enforceAppCheck: !isEmulator},
+  async (request) => {
+    const handle = withEmulatorLogging(
+      "getQuizFunction", handleGetQuiz,
+    );
+    return handle(request.data);
+  }
+);
+
+// onRequest の場合
+export const helloWorld = onRequest(withEmulatorRequestLogging(
+  "helloWorld",
+  (request, response) => {
+    // ハンドラー処理
+  },
+));
+#+END_SRC
+
+** 10.6 本番環境への影響
+
+本番では =FUNCTIONS_EMULATOR= が未設定のため、=withEmulatorLogging= / =withEmulatorRequestLogging= は
+引数で受け取った元のハンドラーをそのまま返す。ラップ関数は生成されず、実行時のオーバーヘッドはゼロ。
+エラーハンドリング（=RankingError= → =HttpsError= 変換）にも影響しない。
+
+-----
+
+* 11. テスト仕様
+
+** 11.1 テスト構成
 
 | ファイル                                 | テスト数 | 対象                                       |
 |------------------------------------------+----------+--------------------------------------------|
-| =tests/handlers/quizHandlers.test.ts=    | 14       | handleGetQuiz（正常系・異常系）            |
+| =tests/handlers/quizHandlers.test.ts=    | 17       | handleGetQuiz（正常系・異常系）            |
 | =tests/services/quizService.test.ts=     | 7        | fetchQuizData・hashAnswer                  |
-| =tests/handlers/rankingHandlers.test.ts= | 22       | handleSubmitScore・handleRegisterUsername・handleGetRanking |
-| =tests/services/rankingService.test.ts=  | 20       | submitScore・registerUsername・getRanking  |
-| *合計*                                   | *63*     |                                            |
+| =tests/handlers/rankingHandlers.test.ts= | 35       | handleSubmitScore・handleRegisterUsername・handleGetRanking |
+| =tests/services/rankingService.test.ts=  | 24       | submitScore・registerUsername・getRanking  |
+| *合計*                                   | *83*     |                                            |
 
-** 10.2 主なテストケース（getQuiz）
+** 11.2 主なテストケース（getQuiz）
 
 *** 正常系
 - 単一レベルで 7 問を返す
@@ -604,7 +681,7 @@ const result = await getRanking({ level: "A" });
 - =levels= に文字列型でない要素を含む場合 =invalid-argument= を投げる
 - プール合計が 7 問未満のとき =failed-precondition= を投げる
 
-** 10.3 テスト実行コマンド
+** 11.3 テスト実行コマンド
 
 #+BEGIN_SRC bash
 # 全テスト実行
