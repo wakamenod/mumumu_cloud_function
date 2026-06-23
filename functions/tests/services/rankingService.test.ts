@@ -279,24 +279,18 @@ describe("submitScore", () => {
 // ---------------------------------------------------------------------------
 
 const VALID_TOKEN = "550e8400-e29b-41d4-a716-446655440000";
-const RECENT_MS = Date.now() - 60_000; // 1 分前（TTL 内）
-const EXPIRED_MS = Date.now() - 11 * 60 * 1000; // 11 分前（TTL 超過）
 
 /**
  * claim_token 付きエントリのファクトリ
  * @param {string | null} claimToken - クレームトークン
- * @param {number} createdAtMs - 作成日時（ミリ秒）
  * @return {object} クレームトークン付きランキングエントリオブジェクト
  */
-function makeEntryWithToken(
-  claimToken: string | null,
-  createdAtMs = RECENT_MS,
-) {
+function makeEntryWithToken(claimToken: string | null) {
   return {
     username: "-----",
     correct_count: 18,
     elapsed_time: 52.4,
-    created_at: {toMillis: () => createdAtMs},
+    created_at: {toMillis: () => Date.now() - 60_000},
     claim_token: claimToken,
   };
 }
@@ -379,22 +373,6 @@ describe("registerUsername", () => {
       name: "RankingError",
       code: "not-found",
     });
-  });
-
-  // --- deadline-exceeded ---
-
-  test("TTL（10分）を超過した claimToken は deadline-exceeded を投げる", async () => {
-    setupTransaction(true, [makeEntryWithToken(VALID_TOKEN, EXPIRED_MS)]);
-
-    await expect(
-      registerUsername("A", VALID_TOKEN, "HELLO"),
-    ).rejects.toMatchObject({
-      name: "RankingError",
-      code: "deadline-exceeded",
-    });
-
-    // TTL 超過時は書き込みを行わない
-    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   // --- エラー型確認 ---

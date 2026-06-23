@@ -69,7 +69,7 @@ export const submitScoreFunction = onCall(
 /**
  * onCall: registerUsername
  * submitScoreFunction が返した claimToken を検証し、ランキングエントリにユーザー名を本登録する。
- * 第三者による不正な書き換えをワンタイムトークン（TTL 10分・単一利用）で防止する。
+ * 第三者による不正な書き換えをワンタイムトークン（単一利用）で防止する。
  *
  * リクエスト形式: { level: string, claimToken: string, username: string }
  * レスポンス形式: { success, rank, username }

@@ -50,11 +50,11 @@ export interface GetRankingResult {
  */
 export class RankingError extends Error {
   /**
-   * @param {"not-found" | "deadline-exceeded"} code - エラーコード
+   * @param {"not-found"} code - エラーコード
    * @param {string} message - エラーメッセージ
    */
   constructor(
-    public readonly code: "not-found" | "deadline-exceeded",
+    public readonly code: "not-found",
     message: string,
   ) {
     super(message);
@@ -72,8 +72,6 @@ const RANKING_LIMIT = 20;
 /** username の初期値（ユーザー名登録前のプレースホルダー） */
 const USERNAME_PLACEHOLDER = "-----";
 
-/** claimToken の有効期限（ミリ秒）*/
-const CLAIM_TOKEN_TTL_MS = 10 * 60 * 1000; // 10分
 
 // ---------------------------------------------------------------------------
 // ユーティリティ
@@ -162,7 +160,7 @@ function toDisplayEntries(scores: RankingEntry[]): RankingDisplayEntry[] {
  * @param {string} claimToken - submitScoreFunction が返した UUID v4
  * @param {string} username - 登録するユーザー名（5文字・英大文字）
  * @return {Promise<RegisterUsernameResult>} 登録結果と確定順位
- * @throws {RankingError} not-found / deadline-exceeded
+ * @throws {RankingError} not-found
  */
 export async function registerUsername(
   level: string,
@@ -190,17 +188,6 @@ export async function registerUsername(
       throw new RankingError(
         "not-found",
         "claimToken に一致するエントリが見つかりません。無効・既使用・期限切れの可能性があります。",
-      );
-    }
-
-    // TTL チェック（created_at から 10 分以内か）
-    const entry = scores[entryIndex];
-    const elapsedMs = Date.now() - entry.created_at.toMillis();
-
-    if (elapsedMs > CLAIM_TOKEN_TTL_MS) {
-      throw new RankingError(
-        "deadline-exceeded",
-        `claimToken の有効期限（10分）を超過しています（経過: ${Math.floor(elapsedMs / 1000)} 秒）。`,
       );
     }
 
