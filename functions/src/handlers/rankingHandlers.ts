@@ -32,8 +32,8 @@ const MIN_SECONDS_PER_QUESTION = 0.5;
 const UUID_V4_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/** username の正規表現（5文字・英大文字） */
-const USERNAME_REGEX = /^[A-Z]{5}$/;
+/** username の正規表現（5文字・英大文字・ハイフン） */
+const USERNAME_REGEX = /^[A-Z-]{5}$/;
 
 // ---------------------------------------------------------------------------
 // ハンドラー
@@ -177,11 +177,11 @@ export async function handleRegisterUsername(
   }
   const claimToken = d.claimToken;
 
-  // username（5文字・英大文字）
+  // username（5文字・英大文字・ハイフン）
   if (typeof d.username !== "string" || !USERNAME_REGEX.test(d.username)) {
     throw new HttpsError(
       "invalid-argument",
-      "\"username\" は英大文字（A〜Z）5文字で指定してください。",
+      "\"username\" は英大文字（A〜Z）またはハイフン（-）の5文字で指定してください。",
     );
   }
   const username = d.username;

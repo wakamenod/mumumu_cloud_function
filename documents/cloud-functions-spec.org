@@ -458,12 +458,12 @@ const result = await registerUsername({
 |--------------+----------+------+---------------------------------------------|
 | =level=      | =string= | ○    | クイズのレベル識別子（A〜M）                |
 | =claimToken= | =string= | ○    | =submitScoreFunction= が返した UUID v4      |
-| =username=   | =string= | ○    | 登録するユーザー名（5文字・英大文字）       |
+| =username=   | =string= | ○    | 登録するユーザー名（5文字・英大文字・ハイフン） |
 
 *** =username= のバリデーション仕様
 - 5文字固定
-- 使用可能文字: 英大文字（=A=〜=Z=）のみ
-- 空文字・スペース・記号・小文字は =invalid-argument= エラー
+- 使用可能文字: 英大文字（=A=〜=Z=）またはハイフン（=-=）
+- 空文字・スペース・ハイフン以外の記号・小文字は =invalid-argument= エラー
 
 ** 8.3 レスポンス
 

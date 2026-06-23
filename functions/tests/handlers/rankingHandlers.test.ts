@@ -378,12 +378,27 @@ describe("handleRegisterUsername", () => {
     ).rejects.toMatchObject({code: "invalid-argument"});
   });
 
-  test("username に記号が含まれるとき invalid-argument を投げる", async () => {
+  test("username にハイフン以外の記号が含まれるとき invalid-argument を投げる", async () => {
     await expect(
       handleRegisterUsername({
         level: VALID_LEVEL, claimToken: VALID_TOKEN, username: "HE!LO",
       }),
     ).rejects.toMatchObject({code: "invalid-argument"});
+  });
+
+  test("username にハイフンが含まれるとき正常に処理される", async () => {
+    const result = await handleRegisterUsername({
+      level: VALID_LEVEL,
+      claimToken: VALID_TOKEN,
+      username: "AB-CD",
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockRegisterUsername).toHaveBeenCalledWith(
+      VALID_LEVEL,
+      VALID_TOKEN,
+      "AB-CD",
+    );
   });
 
   // --- RankingError の伝播 ---
