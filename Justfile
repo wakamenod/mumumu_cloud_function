@@ -73,6 +73,19 @@ shell:
 deploy:
     npm --prefix functions run deploy
 
+# 【本番】問題 JSON を Storage にアップロード（バックアップ→削除→アップロード）
+[confirm("本番 Firebase Storage にアップロードします。続行しますか？")]
+upload-quiz:
+    @echo "==> 前回のバックアップを削除..."
+    gcloud storage rm -r gs://mumumu-a278.firebasestorage.app/quiz-backup/ 2>/dev/null || true
+    @echo "==> 現在の quiz/ をバックアップ..."
+    gcloud storage cp -r gs://mumumu-a278.firebasestorage.app/quiz/ gs://mumumu-a278.firebasestorage.app/quiz-backup/ 2>/dev/null || true
+    @echo "==> 現在の quiz/ を削除..."
+    gcloud storage rm -r gs://mumumu-a278.firebasestorage.app/quiz/ 2>/dev/null || true
+    @echo "==> 新しい問題 JSON をアップロード..."
+    gcloud storage cp emulator-seed/quiz/*.json gs://mumumu-a278.firebasestorage.app/quiz/
+    @echo "✅ アップロード完了"
+
 # ───────────────────────────────────────────────
 # ログ・モニタリング
 # ───────────────────────────────────────────────
